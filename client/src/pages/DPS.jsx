@@ -1,6 +1,13 @@
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
+
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
+import ActionButton from '../components/ActionButton.jsx';
+import BottomSheet from '../components/BottomSheet.jsx';
 import { useFinance } from '../context/FinanceContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import api, { apiPaths } from '../api/client';
 import { formatBDT } from '../utils/formatBDT';
 
 function daysUntil(dateStr) {
@@ -11,11 +18,52 @@ function daysUntil(dateStr) {
 }
 
 export default function DPS() {
-  const { dps } = useFinance();
+  const { dps, loadAll } = useFinance();
+  const toast = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newMonthly, setNewMonthly] = useState('');
+  const [newMaturity, setNewMaturity] = useState('');
+  const [newStartDate, setNewStartDate] = useState('');
+  const [newMaturityDate, setNewMaturityDate] = useState('');
+
+  const openAdd = () => {
+    setNewName('');
+    setNewMonthly('');
+    setNewMaturity('');
+    setNewStartDate('');
+    setNewMaturityDate('');
+    setAddOpen(true);
+  };
+
+  const handleAdd = async () => {
+    if (!newName || !newMonthly) {
+      toast.push('Name and monthly amount are required', 'error');
+      return;
+    }
+    setAddLoading(true);
+    try {
+      await api.post(apiPaths.dps, {
+        name: newName.trim(),
+        monthly_amount: Number(newMonthly),
+        maturity_amount: newMaturity || null,
+        start_date: newStartDate || null,
+        maturity_date: newMaturityDate || null,
+      });
+      await loadAll();
+      toast.push('DPS added', 'success');
+      setAddOpen(false);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to add DPS', 'error');
+    } finally {
+      setAddLoading(false);
+    }
+  };
 
   return (
     <>
-      <AppHeader title="DPS" />
+      <AppHeader title="DPS" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
       <main className="px-4 pt-3 space-y-4">
         {dps.length === 0 ? (
           <div className="card p-6 text-center text-sm text-text-muted">No DPS accounts yet.</div>
@@ -62,6 +110,57 @@ export default function DPS() {
           );
         })}
       </main>
+
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add DPS">
+        <label className="block text-xs text-text-muted mb-1">DPS name</label>
+        <input
+          className="input mb-3"
+          type="text"
+          placeholder="e.g. Sonali DPS"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Monthly deposit (BDT)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 5000"
+          value={newMonthly}
+          onChange={(e) => setNewMonthly(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Maturity amount (BDT, optional)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 600000"
+          value={newMaturity}
+          onChange={(e) => setNewMaturity(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Start date (optional)</label>
+        <input
+          className="input mb-3"
+          type="date"
+          value={newStartDate}
+          onChange={(e) => setNewStartDate(e.target.value)}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Maturity date (optional)</label>
+        <input
+          className="input mb-4"
+          type="date"
+          value={newMaturityDate}
+          onChange={(e) => setNewMaturityDate(e.target.value)}
+        />
+
+        <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
+          Add DPS
+        </ActionButton>
+      </BottomSheet>
     </>
   );
 }

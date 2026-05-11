@@ -16,4 +16,26 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/', requireAuth, async (req, res, next) => {
+  try {
+    const { name, limit_amt, due_date } = req.body;
+    if (!name || !limit_amt) {
+      return res.status(400).json({ error: 'Name and limit are required.' });
+    }
+    const [result] = await pool.query(
+      'INSERT INTO credit_cards (user_id, name, limit_amt, due_amount, due_date) VALUES (?, ?, ?, ?, ?)',
+      [req.user.id, name.trim(), Number(limit_amt), 0, due_date || null],
+    );
+    res.status(201).json({
+      id: result.insertId,
+      name: name.trim(),
+      limit_amt: Number(limit_amt),
+      due_amount: 0,
+      due_date: due_date || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

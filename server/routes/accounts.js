@@ -34,4 +34,23 @@ router.get('/:id/transactions', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/', requireAuth, async (req, res, next) => {
+  try {
+    const { name, type, balance } = req.body;
+    if (!name || !type) {
+      return res.status(400).json({ error: 'Name and type are required.' });
+    }
+    if (!['bank', 'mobile_banking', 'cash'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid account type.' });
+    }
+    const [result] = await pool.query(
+      'INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)',
+      [req.user.id, name.trim(), type, Number(balance) || 0],
+    );
+    res.status(201).json({ id: result.insertId, name: name.trim(), type, balance: Number(balance) || 0 });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

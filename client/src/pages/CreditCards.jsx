@@ -1,6 +1,13 @@
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
+
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
+import ActionButton from '../components/ActionButton.jsx';
+import BottomSheet from '../components/BottomSheet.jsx';
 import { useFinance } from '../context/FinanceContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import api, { apiPaths } from '../api/client';
 import { formatBDT } from '../utils/formatBDT';
 
 function daysUntil(dateStr) {
@@ -18,11 +25,46 @@ function maskedNumber(id) {
 }
 
 export default function CreditCards() {
-  const { creditCards } = useFinance();
+  const { creditCards, loadAll } = useFinance();
+  const toast = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newLimit, setNewLimit] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
+
+  const openAdd = () => {
+    setNewName('');
+    setNewLimit('');
+    setNewDueDate('');
+    setAddOpen(true);
+  };
+
+  const handleAdd = async () => {
+    if (!newName || !newLimit) {
+      toast.push('Name and limit are required', 'error');
+      return;
+    }
+    setAddLoading(true);
+    try {
+      await api.post(apiPaths.creditCards, {
+        name: newName.trim(),
+        limit_amt: Number(newLimit),
+        due_date: newDueDate || null,
+      });
+      await loadAll();
+      toast.push('Credit card added', 'success');
+      setAddOpen(false);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to add credit card', 'error');
+    } finally {
+      setAddLoading(false);
+    }
+  };
 
   return (
     <>
-      <AppHeader title="Credit Cards" />
+      <AppHeader title="Credit Cards" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
       <main className="px-4 pt-3 space-y-4">
         {creditCards.length === 0 ? (
           <div className="card p-6 text-center text-sm text-text-muted">No credit cards on file.</div>
@@ -79,6 +121,39 @@ export default function CreditCards() {
           );
         })}
       </main>
+
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add Credit Card">
+        <label className="block text-xs text-text-muted mb-1">Card name</label>
+        <input
+          className="input mb-3"
+          type="text"
+          placeholder="e.g. DBBL Visa"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Credit limit (BDT)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 100000"
+          value={newLimit}
+          onChange={(e) => setNewLimit(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Due date (optional)</label>
+        <input
+          className="input mb-4"
+          type="date"
+          value={newDueDate}
+          onChange={(e) => setNewDueDate(e.target.value)}
+        />
+
+        <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
+          Add Credit Card
+        </ActionButton>
+      </BottomSheet>
     </>
   );
 }

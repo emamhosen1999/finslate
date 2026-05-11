@@ -14,10 +14,9 @@ export const apiPaths = {
   register: '/api/auth/register',
   loginEmail: '/api/auth/login/email',
   logout: '/api/auth/logout',
-  summary: '/api/dashboard/summary',
-  postSalary: '/api/actions/post-salary',
-  debtRepayment: '/api/actions/debt-repayment',
-  transactions: (params = {}) => {
+  accounts: '/api/accounts',
+  transactions: '/api/transactions',
+  transactionsList: (params = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
@@ -25,6 +24,12 @@ export const apiPaths = {
     const q = search.toString();
     return `/api/transactions${q ? `?${q}` : ''}`;
   },
+  creditCards: '/api/credit-cards',
+  loans: '/api/loans',
+  dps: '/api/dps',
+  summary: '/api/dashboard/summary',
+  postSalary: '/api/actions/post-salary',
+  debtRepayment: '/api/actions/debt-repayment',
 };
 
 export default api;

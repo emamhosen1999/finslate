@@ -66,4 +66,30 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/', requireAuth, async (req, res, next) => {
+  try {
+    const { account_id, type, amount, category, description } = req.body;
+    if (!account_id || !type || !amount || !category) {
+      return res.status(400).json({ error: 'Account, type, amount, and category are required.' });
+    }
+    if (!['credit', 'debit'].includes(type)) {
+      return res.status(400).json({ error: 'Type must be credit or debit.' });
+    }
+    const [result] = await pool.query(
+      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, Number(account_id), type, Number(amount), category.trim(), description?.trim() || null],
+    );
+    res.status(201).json({
+      id: result.insertId,
+      account_id: Number(account_id),
+      type,
+      amount: Number(amount),
+      category: category.trim(),
+      description: description?.trim() || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
