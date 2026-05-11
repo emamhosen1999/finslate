@@ -48,9 +48,12 @@ Key values to set:
 Run these in the project root (via cPanel Terminal or SSH):
 
 ```bash
-npm install          # installs root deps + runs postinstall (server deps)
+npm install          # installs all server deps (now in root package.json)
 npm run build:prod   # installs client deps + builds React app → client/dist
 ```
+
+> **Note**: Server dependencies live in the root `package.json` so a single
+> `npm install` at the project root is enough — no separate `cd server && npm install` needed.
 
 ---
 
