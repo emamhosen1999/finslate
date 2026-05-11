@@ -3,3 +3,5 @@ node_modules
 .DS_Store
 *.log
 .vite
+# client/dist is intentionally tracked — built locally and deployed via git
+!client/dist
