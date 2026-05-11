@@ -7,9 +7,27 @@ router.get('/google', passport.authenticate('google', { scope: ['profile', 'emai
 
 router.get(
   '/google/callback',
-  passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_ORIGIN || ''}/login?error=oauth` }),
-  (req, res) => {
-    res.redirect(`${process.env.CLIENT_ORIGIN || ''}/`);
+  (req, res, next) => {
+    passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_ORIGIN || ''}/login?error=oauth` }, (err, user) => {
+      if (err) {
+        // eslint-disable-next-line no-console
+        console.error('[auth] google callback error:', err);
+        return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=oauth`);
+      }
+      if (!user) {
+        // eslint-disable-next-line no-console
+        console.warn('[auth] google callback: no user returned');
+        return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=oauth`);
+      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          // eslint-disable-next-line no-console
+          console.error('[auth] session login error:', loginErr);
+          return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=oauth`);
+        }
+        return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/`);
+      });
+    })(req, res, next);
   },
 );
 
