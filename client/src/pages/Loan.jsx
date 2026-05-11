@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wallet } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
@@ -11,7 +11,7 @@ import api, { apiPaths } from '../api/client';
 import { formatBDT } from '../utils/formatBDT';
 
 export default function Loan() {
-  const { loans, loadAll } = useFinance();
+  const { loans, accounts, loadAll } = useFinance();
   const toast = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
@@ -21,6 +21,11 @@ export default function Loan() {
   const [newRate, setNewRate] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payLoanId, setPayLoanId] = useState(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payAccountId, setPayAccountId] = useState('');
 
   const openAdd = () => {
     setEditingId(null);
@@ -84,6 +89,34 @@ export default function Loan() {
     }
   };
 
+  const openPay = (loan) => {
+    setPayLoanId(loan.id);
+    setPayAmount(String(loan.monthly_emi));
+    setPayAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
+    setPayOpen(true);
+  };
+
+  const handlePay = async () => {
+    if (!payAmount) {
+      toast.push('Payment amount is required', 'error');
+      return;
+    }
+    setPayLoading(true);
+    try {
+      await api.post(`${apiPaths.loans}/${payLoanId}/pay`, {
+        amount: Number(payAmount),
+        account_id: payAccountId ? Number(payAccountId) : null,
+      });
+      toast.push('Payment successful', 'success');
+      await loadAll();
+      setPayOpen(false);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to process payment', 'error');
+    } finally {
+      setPayLoading(false);
+    }
+  };
+
   return (
     <>
       <AppHeader title="Loans" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
@@ -107,6 +140,15 @@ export default function Loan() {
                     {l.interest_rate ? `${Number(l.interest_rate).toFixed(2)}% p.a.` : ''}
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openPay(l)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--positive)' }}
+                      disabled={l.remaining <= 0}
+                    >
+                      <Wallet size={16} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => openEdit(l)}
@@ -211,6 +253,36 @@ export default function Loan() {
           <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
           <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
         </div>
+      </BottomSheet>
+
+      <BottomSheet open={payOpen} onClose={() => setPayOpen(false)} title="Pay Loan">
+        <label className="block text-xs text-text-muted mb-1">Payment amount (BDT)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 5000"
+          value={payAmount}
+          onChange={(e) => setPayAmount(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Pay from account (optional)</label>
+        <select
+          className="input mb-4"
+          value={payAccountId}
+          onChange={(e) => setPayAccountId(e.target.value)}
+        >
+          <option value="">No account (just clear debt)</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} · {formatBDT(a.balance)}
+            </option>
+          ))}
+        </select>
+
+        <ActionButton variant="primary" className="w-full" loading={payLoading} onClick={handlePay}>
+          Pay
+        </ActionButton>
       </BottomSheet>
     </>
   );

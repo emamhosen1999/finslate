@@ -102,4 +102,53 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/transfer', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { from_account_id, to_account_id, amount, description } = req.body;
+    if (!from_account_id || !to_account_id || !amount) {
+      return res.status(400).json({ error: 'From account, to account, and amount are required.' });
+    }
+    if (from_account_id === to_account_id) {
+      return res.status(400).json({ error: 'Cannot transfer to the same account.' });
+    }
+    const transferAmount = Number(amount);
+    const [fromAccount] = await connection.query('SELECT * FROM accounts WHERE id = ? AND user_id = ?', [Number(from_account_id), req.user.id]);
+    if (!fromAccount.length) {
+      return res.status(404).json({ error: 'Source account not found.' });
+    }
+    const [toAccount] = await connection.query('SELECT * FROM accounts WHERE id = ? AND user_id = ?', [Number(to_account_id), req.user.id]);
+    if (!toAccount.length) {
+      return res.status(404).json({ error: 'Destination account not found.' });
+    }
+    if (Number(fromAccount[0].balance) < transferAmount) {
+      return res.status(400).json({ error: 'Insufficient balance in source account.' });
+    }
+    await connection.query(
+      'UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?',
+      [transferAmount, Number(from_account_id), req.user.id],
+    );
+    await connection.query(
+      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+      [transferAmount, Number(to_account_id), req.user.id],
+    );
+    await connection.query(
+      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, Number(from_account_id), 'debit', transferAmount, 'Transfer', description || `Transfer to ${toAccount[0].name}`],
+    );
+    await connection.query(
+      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, Number(to_account_id), 'credit', transferAmount, 'Transfer', description || `Transfer from ${fromAccount[0].name}`],
+    );
+    await connection.commit();
+    res.json({ message: 'Transfer successful.' });
+  } catch (err) {
+    await connection.rollback();
+    next(err);
+  } finally {
+    connection.release();
+  }
+});
+
 module.exports = router;

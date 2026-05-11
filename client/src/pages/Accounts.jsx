@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, Smartphone, Banknote, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Wallet, Smartphone, Banknote, Plus, Pencil, Trash2, ArrowRightLeft } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import TransactionFeed from '../components/TransactionFeed.jsx';
@@ -33,6 +33,12 @@ export default function Accounts() {
   const [newBalance, setNewBalance] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [fromAccountId, setFromAccountId] = useState('');
+  const [toAccountId, setToAccountId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDescription, setTransferDescription] = useState('');
 
   const accountTx = selected
     ? (transactions || []).filter((t) => t.account_id === selected.id)
@@ -96,9 +102,61 @@ export default function Accounts() {
     }
   };
 
+  const openTransfer = () => {
+    setFromAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
+    setToAccountId(accounts[1]?.id ? String(accounts[1].id) : '');
+    setTransferAmount('');
+    setTransferDescription('');
+    setTransferOpen(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!fromAccountId || !toAccountId || !transferAmount) {
+      toast.push('From account, to account, and amount are required', 'error');
+      return;
+    }
+    if (fromAccountId === toAccountId) {
+      toast.push('Cannot transfer to the same account', 'error');
+      return;
+    }
+    setTransferLoading(true);
+    try {
+      await api.post(`${apiPaths.accounts}/transfer`, {
+        from_account_id: Number(fromAccountId),
+        to_account_id: Number(toAccountId),
+        amount: Number(transferAmount),
+        description: transferDescription || null,
+      });
+      toast.push('Transfer successful', 'success');
+      await loadAll();
+      setTransferOpen(false);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to transfer', 'error');
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   return (
     <>
-      <AppHeader title="Accounts" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
+      <AppHeader 
+        title="Accounts" 
+        action={
+          <div className="flex gap-2">
+            <button 
+              type="button" 
+              onClick={openTransfer} 
+              className="btn btn-ghost text-xs py-2 px-3"
+              disabled={accounts.length < 2}
+            >
+              <ArrowRightLeft size={14} /> Transfer
+            </button>
+            <button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3">
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        } 
+      />
       <main className="px-4 pt-3 space-y-3">
         {accounts.map((a) => {
           const Icon = ICONS[a.type] || Wallet;
@@ -202,6 +260,57 @@ export default function Accounts() {
           <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
           <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
         </div>
+      </BottomSheet>
+
+      <BottomSheet open={transferOpen} onClose={() => setTransferOpen(false)} title="Transfer Between Accounts">
+        <label className="block text-xs text-text-muted mb-1">From account</label>
+        <select
+          className="input mb-3"
+          value={fromAccountId}
+          onChange={(e) => setFromAccountId(e.target.value)}
+        >
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} · {formatBDT(a.balance)}
+            </option>
+          ))}
+        </select>
+
+        <label className="block text-xs text-text-muted mb-1">To account</label>
+        <select
+          className="input mb-3"
+          value={toAccountId}
+          onChange={(e) => setToAccountId(e.target.value)}
+        >
+          {accounts.filter(a => String(a.id) !== fromAccountId).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} · {formatBDT(a.balance)}
+            </option>
+          ))}
+        </select>
+
+        <label className="block text-xs text-text-muted mb-1">Amount (BDT)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 5000"
+          value={transferAmount}
+          onChange={(e) => setTransferAmount(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Description (optional)</label>
+        <input
+          className="input mb-4"
+          type="text"
+          placeholder="e.g. Monthly allowance"
+          value={transferDescription}
+          onChange={(e) => setTransferDescription(e.target.value)}
+        />
+
+        <ActionButton variant="primary" className="w-full" loading={transferLoading} onClick={handleTransfer}>
+          Transfer
+        </ActionButton>
       </BottomSheet>
     </>
   );

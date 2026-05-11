@@ -99,4 +99,49 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/:id/deposit', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { amount, account_id } = req.body;
+    const dpsId = Number(req.params.id);
+    if (!amount) {
+      return res.status(400).json({ error: 'Deposit amount is required.' });
+    }
+    const depositAmount = Number(amount);
+    const [existing] = await connection.query('SELECT * FROM dps WHERE id = ? AND user_id = ?', [dpsId, req.user.id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: 'DPS not found.' });
+    }
+    const dps = existing[0];
+    const currentDeposited = Number(dps.total_deposited) || 0;
+    const newDeposited = currentDeposited + depositAmount;
+    await connection.query(
+      'UPDATE dps SET total_deposited = ? WHERE id = ? AND user_id = ?',
+      [newDeposited, dpsId, req.user.id],
+    );
+    if (account_id) {
+      const [account] = await connection.query('SELECT id FROM accounts WHERE id = ? AND user_id = ?', [Number(account_id), req.user.id]);
+      if (!account.length) {
+        return res.status(404).json({ error: 'Account not found.' });
+      }
+      await connection.query(
+        'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, Number(account_id), 'debit', depositAmount, 'DPS Deposit', `Deposit to ${dps.name}`],
+      );
+      await connection.query(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?',
+        [depositAmount, Number(account_id), req.user.id],
+      );
+    }
+    await connection.commit();
+    res.json({ message: 'Deposit successful.', newDeposited });
+  } catch (err) {
+    await connection.rollback();
+    next(err);
+  } finally {
+    connection.release();
+  }
+});
+
 module.exports = router;

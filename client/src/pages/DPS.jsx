@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wallet } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
@@ -18,7 +18,7 @@ function daysUntil(dateStr) {
 }
 
 export default function DPS() {
-  const { dps, loadAll } = useFinance();
+  const { dps, accounts, loadAll } = useFinance();
   const toast = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
@@ -29,6 +29,11 @@ export default function DPS() {
   const [newMaturityDate, setNewMaturityDate] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [depositDpsId, setDepositDpsId] = useState(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState('');
 
   const openAdd = () => {
     setEditingId(null);
@@ -96,6 +101,34 @@ export default function DPS() {
     }
   };
 
+  const openDeposit = (d) => {
+    setDepositDpsId(d.id);
+    setDepositAmount(String(d.monthly_amount));
+    setDepositAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
+    setDepositOpen(true);
+  };
+
+  const handleDeposit = async () => {
+    if (!depositAmount) {
+      toast.push('Deposit amount is required', 'error');
+      return;
+    }
+    setDepositLoading(true);
+    try {
+      await api.post(`${apiPaths.dps}/${depositDpsId}/deposit`, {
+        amount: Number(depositAmount),
+        account_id: depositAccountId ? Number(depositAccountId) : null,
+      });
+      toast.push('Deposit successful', 'success');
+      await loadAll();
+      setDepositOpen(false);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to process deposit', 'error');
+    } finally {
+      setDepositLoading(false);
+    }
+  };
+
   return (
     <>
       <AppHeader title="DPS" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
@@ -117,6 +150,14 @@ export default function DPS() {
                     {monthly ? `${formatBDT(monthly)} / month` : ''}
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openDeposit(d)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--positive)' }}
+                    >
+                      <Wallet size={16} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => openEdit(d)}
@@ -223,6 +264,36 @@ export default function DPS() {
           <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
           <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
         </div>
+      </BottomSheet>
+
+      <BottomSheet open={depositOpen} onClose={() => setDepositOpen(false)} title="Deposit to DPS">
+        <label className="block text-xs text-text-muted mb-1">Deposit amount (BDT)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 5000"
+          value={depositAmount}
+          onChange={(e) => setDepositAmount(e.target.value.replace(/[^\d]/g, ''))}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Deposit from account (optional)</label>
+        <select
+          className="input mb-4"
+          value={depositAccountId}
+          onChange={(e) => setDepositAccountId(e.target.value)}
+        >
+          <option value="">No account (just add to DPS)</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} · {formatBDT(a.balance)}
+            </option>
+          ))}
+        </select>
+
+        <ActionButton variant="primary" className="w-full" loading={depositLoading} onClick={handleDeposit}>
+          Deposit
+        </ActionButton>
       </BottomSheet>
     </>
   );

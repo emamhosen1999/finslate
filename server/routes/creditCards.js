@@ -88,4 +88,52 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/:id/pay', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { amount, account_id } = req.body;
+    const cardId = Number(req.params.id);
+    if (!amount) {
+      return res.status(400).json({ error: 'Payment amount is required.' });
+    }
+    const paymentAmount = Number(amount);
+    const [existing] = await connection.query('SELECT * FROM credit_cards WHERE id = ? AND user_id = ?', [cardId, req.user.id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Credit card not found.' });
+    }
+    const card = existing[0];
+    const currentDue = Number(card.due_amount) || 0;
+    if (paymentAmount > currentDue) {
+      return res.status(400).json({ error: 'Payment amount exceeds due amount.' });
+    }
+    const newDue = Math.max(0, currentDue - paymentAmount);
+    await connection.query(
+      'UPDATE credit_cards SET due_amount = ? WHERE id = ? AND user_id = ?',
+      [newDue, cardId, req.user.id],
+    );
+    if (account_id) {
+      const [account] = await connection.query('SELECT id FROM accounts WHERE id = ? AND user_id = ?', [Number(account_id), req.user.id]);
+      if (!account.length) {
+        return res.status(404).json({ error: 'Account not found.' });
+      }
+      await connection.query(
+        'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, Number(account_id), 'debit', paymentAmount, 'Credit Card Payment', `Payment to ${card.name}`],
+      );
+      await connection.query(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?',
+        [paymentAmount, Number(account_id), req.user.id],
+      );
+    }
+    await connection.commit();
+    res.json({ message: 'Payment successful.', newDue });
+  } catch (err) {
+    await connection.rollback();
+    next(err);
+  } finally {
+    connection.release();
+  }
+});
+
 module.exports = router;

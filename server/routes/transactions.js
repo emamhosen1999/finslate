@@ -67,7 +67,9 @@ router.get('/', requireAuth, async (req, res, next) => {
 });
 
 router.post('/', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
     const { account_id, type, amount, category, description } = req.body;
     if (!account_id || !type || !amount || !category) {
       return res.status(400).json({ error: 'Account, type, amount, and category are required.' });
@@ -75,10 +77,16 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!['credit', 'debit'].includes(type)) {
       return res.status(400).json({ error: 'Type must be credit or debit.' });
     }
-    const [result] = await pool.query(
+    const [result] = await connection.query(
       'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
       [req.user.id, Number(account_id), type, Number(amount), category.trim(), description?.trim() || null],
     );
+    const balanceChange = type === 'credit' ? Number(amount) : -Number(amount);
+    await connection.query(
+      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+      [balanceChange, Number(account_id), req.user.id],
+    );
+    await connection.commit();
     res.status(201).json({
       id: result.insertId,
       account_id: Number(account_id),
@@ -88,23 +96,33 @@ router.post('/', requireAuth, async (req, res, next) => {
       description: description?.trim() || null,
     });
   } catch (err) {
+    await connection.rollback();
     next(err);
+  } finally {
+    connection.release();
   }
 });
 
 router.put('/:id', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
     const { account_id, type, amount, category, description } = req.body;
     const txId = Number(req.params.id);
-    const [existing] = await pool.query('SELECT id FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    const [existing] = await connection.query('SELECT * FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
     if (!existing.length) {
       return res.status(404).json({ error: 'Transaction not found.' });
     }
+    const oldTx = existing[0];
     const updates = [];
     const values = [];
+    let newAccountId = oldTx.account_id;
+    let newType = oldTx.type;
+    let newAmount = oldTx.amount;
     if (account_id !== undefined) {
       updates.push('account_id = ?');
       values.push(Number(account_id));
+      newAccountId = Number(account_id);
     }
     if (type !== undefined) {
       if (!['credit', 'debit'].includes(type)) {
@@ -112,10 +130,12 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       }
       updates.push('type = ?');
       values.push(type);
+      newType = type;
     }
     if (amount !== undefined) {
       updates.push('amount = ?');
       values.push(Number(amount));
+      newAmount = Number(amount);
     }
     if (category !== undefined) {
       updates.push('category = ?');
@@ -129,23 +149,63 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'No fields to update.' });
     }
     values.push(txId, req.user.id);
-    await pool.query(`UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, values);
+    await connection.query(`UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, values);
+    const oldBalanceChange = oldTx.type === 'credit' ? Number(oldTx.amount) : -Number(oldTx.amount);
+    const newBalanceChange = newType === 'credit' ? Number(newAmount) : -Number(newAmount);
+    const netChange = newBalanceChange - oldBalanceChange;
+    if (netChange !== 0 || newAccountId !== oldTx.account_id) {
+      if (newAccountId !== oldTx.account_id) {
+        await connection.query(
+          'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+          [-oldBalanceChange, oldTx.account_id, req.user.id],
+        );
+        await connection.query(
+          'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+          [newBalanceChange, newAccountId, req.user.id],
+        );
+      } else {
+        await connection.query(
+          'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+          [netChange, newAccountId, req.user.id],
+        );
+      }
+    }
+    await connection.commit();
     res.json({ message: 'Transaction updated.' });
   } catch (err) {
+    await connection.rollback();
     next(err);
+  } finally {
+    connection.release();
   }
 });
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
+  const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
     const txId = Number(req.params.id);
-    const [result] = await pool.query('DELETE FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    const [existing] = await connection.query('SELECT * FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+    const tx = existing[0];
+    const [result] = await connection.query('DELETE FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Transaction not found.' });
     }
+    const balanceChange = tx.type === 'credit' ? -Number(tx.amount) : Number(tx.amount);
+    await connection.query(
+      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+      [balanceChange, tx.account_id, req.user.id],
+    );
+    await connection.commit();
     res.json({ message: 'Transaction deleted.' });
   } catch (err) {
+    await connection.rollback();
     next(err);
+  } finally {
+    connection.release();
   }
 });
 
