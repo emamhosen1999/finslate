@@ -24,6 +24,8 @@ export default function Transactions() {
   const [addOpen, setAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [newTx, setNewTx] = useState({ account_id: '', type: 'debit', amount: '', category: '', description: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const [category, setCategory] = useState('');
   const [type, setType] = useState('');
@@ -33,7 +35,20 @@ export default function Transactions() {
   const [search, setSearch] = useState('');
 
   const openAdd = () => {
+    setEditingId(null);
     setNewTx({ account_id: accounts[0]?.id ? String(accounts[0].id) : '', type: 'debit', amount: '', category: '', description: '' });
+    setAddOpen(true);
+  };
+
+  const openEdit = (tx) => {
+    setEditingId(tx.id);
+    setNewTx({
+      account_id: String(tx.account_id),
+      type: tx.type,
+      amount: String(tx.amount),
+      category: tx.category,
+      description: tx.description || '',
+    });
     setAddOpen(true);
   };
 
@@ -44,22 +59,46 @@ export default function Transactions() {
     }
     setAddLoading(true);
     try {
-      await api.post(apiPaths.transactions, {
-        account_id: Number(newTx.account_id),
-        type: newTx.type,
-        amount: Number(newTx.amount),
-        category: newTx.category,
-        description: newTx.description || null,
-      });
+      if (editingId) {
+        await api.put(`${apiPaths.transactions}/${editingId}`, {
+          account_id: Number(newTx.account_id),
+          type: newTx.type,
+          amount: Number(newTx.amount),
+          category: newTx.category,
+          description: newTx.description || null,
+        });
+        toast.push('Transaction updated', 'success');
+      } else {
+        await api.post(apiPaths.transactions, {
+          account_id: Number(newTx.account_id),
+          type: newTx.type,
+          amount: Number(newTx.amount),
+          category: newTx.category,
+          description: newTx.description || null,
+        });
+        toast.push('Transaction added', 'success');
+      }
       await loadAll();
-      toast.push('Transaction added', 'success');
       setAddOpen(false);
       setItems([]);
       setPage(1);
     } catch (err) {
-      toast.push(err?.response?.data?.error || 'Failed to add transaction', 'error');
+      toast.push(err?.response?.data?.error || 'Failed to save transaction', 'error');
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleDelete = async (txId) => {
+    try {
+      await api.delete(`${apiPaths.transactions}/${txId}`);
+      toast.push('Transaction deleted', 'success');
+      await loadAll();
+      setItems([]);
+      setPage(1);
+      setDeleteConfirm(null);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to delete transaction', 'error');
     }
   };
 
@@ -152,7 +191,7 @@ export default function Transactions() {
         </div>
 
         <div className="mt-3">
-          <TransactionFeed transactions={filtered} />
+          <TransactionFeed transactions={filtered} onEdit={openEdit} onDelete={(t) => setDeleteConfirm(t.id)} />
         </div>
 
         {items.length < total ? (
@@ -169,7 +208,7 @@ export default function Transactions() {
         ) : null}
       </main>
 
-      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add Transaction">
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title={editingId ? 'Edit Transaction' : 'Add Transaction'}>
         <label className="block text-xs text-text-muted mb-1">Account</label>
         <select
           className="input mb-3"
@@ -224,8 +263,16 @@ export default function Transactions() {
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
-          Add Transaction
+          {editingId ? 'Update Transaction' : 'Add Transaction'}
         </ActionButton>
+      </BottomSheet>
+
+      <BottomSheet open={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} title="Delete Transaction">
+        <p className="text-sm text-text-muted mb-4">Are you sure you want to delete this transaction?</p>
+        <div className="flex gap-3">
+          <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
+          <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
+        </div>
       </BottomSheet>
     </>
   );

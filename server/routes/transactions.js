@@ -92,4 +92,61 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { account_id, type, amount, category, description } = req.body;
+    const txId = Number(req.params.id);
+    const [existing] = await pool.query('SELECT id FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+    const updates = [];
+    const values = [];
+    if (account_id !== undefined) {
+      updates.push('account_id = ?');
+      values.push(Number(account_id));
+    }
+    if (type !== undefined) {
+      if (!['credit', 'debit'].includes(type)) {
+        return res.status(400).json({ error: 'Type must be credit or debit.' });
+      }
+      updates.push('type = ?');
+      values.push(type);
+    }
+    if (amount !== undefined) {
+      updates.push('amount = ?');
+      values.push(Number(amount));
+    }
+    if (category !== undefined) {
+      updates.push('category = ?');
+      values.push(category.trim());
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description?.trim() || null);
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update.' });
+    }
+    values.push(txId, req.user.id);
+    await pool.query(`UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, values);
+    res.json({ message: 'Transaction updated.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const txId = Number(req.params.id);
+    const [result] = await pool.query('DELETE FROM transactions WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+    res.json({ message: 'Transaction deleted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

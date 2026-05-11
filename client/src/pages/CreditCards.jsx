@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
@@ -32,11 +32,22 @@ export default function CreditCards() {
   const [newName, setNewName] = useState('');
   const [newLimit, setNewLimit] = useState('');
   const [newDueDate, setNewDueDate] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const openAdd = () => {
+    setEditingId(null);
     setNewName('');
     setNewLimit('');
     setNewDueDate('');
+    setAddOpen(true);
+  };
+
+  const openEdit = (card) => {
+    setEditingId(card.id);
+    setNewName(card.name);
+    setNewLimit(String(card.limit_amt));
+    setNewDueDate(card.due_date || '');
     setAddOpen(true);
   };
 
@@ -47,18 +58,38 @@ export default function CreditCards() {
     }
     setAddLoading(true);
     try {
-      await api.post(apiPaths.creditCards, {
-        name: newName.trim(),
-        limit_amt: Number(newLimit),
-        due_date: newDueDate || null,
-      });
+      if (editingId) {
+        await api.put(`${apiPaths.creditCards}/${editingId}`, {
+          name: newName.trim(),
+          limit_amt: Number(newLimit),
+          due_date: newDueDate || null,
+        });
+        toast.push('Credit card updated', 'success');
+      } else {
+        await api.post(apiPaths.creditCards, {
+          name: newName.trim(),
+          limit_amt: Number(newLimit),
+          due_date: newDueDate || null,
+        });
+        toast.push('Credit card added', 'success');
+      }
       await loadAll();
-      toast.push('Credit card added', 'success');
       setAddOpen(false);
     } catch (err) {
-      toast.push(err?.response?.data?.error || 'Failed to add credit card', 'error');
+      toast.push(err?.response?.data?.error || 'Failed to save credit card', 'error');
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleDelete = async (cardId) => {
+    try {
+      await api.delete(`${apiPaths.creditCards}/${cardId}`);
+      toast.push('Credit card deleted', 'success');
+      await loadAll();
+      setDeleteConfirm(null);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to delete credit card', 'error');
     }
   };
 
@@ -75,17 +106,30 @@ export default function CreditCards() {
           const pct = c.limit_amt > 0 ? (Number(c.due_amount) / Number(c.limit_amt)) * 100 : 0;
           return (
             <div key={c.id} className="space-y-2">
-              <div
-                className="rounded-card p-4 text-white relative overflow-hidden"
-                style={{
-                  background: 'linear-gradient(135deg, #2A3B7A 0%, #6C8EF5 100%)',
-                  minHeight: 170,
-                  border: '1px solid var(--border)',
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-xs uppercase tracking-[0.2em] opacity-80">{c.name}</div>
-                  <div className="text-[10px] uppercase tracking-widest opacity-80">Visa</div>
+              <div className="card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-semibold">{c.name}</div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(c)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(c.id)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--negative)' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-text-muted mb-2">
+                  {c.due_date ? `Due ${c.due_date}` : ''}
                 </div>
                 <div className="mt-8 font-mono text-lg tracking-widest">{maskedNumber(c.id)}</div>
                 <div className="mt-4 flex items-end justify-between">
@@ -122,7 +166,7 @@ export default function CreditCards() {
         })}
       </main>
 
-      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add Credit Card">
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title={editingId ? 'Edit Credit Card' : 'Add Credit Card'}>
         <label className="block text-xs text-text-muted mb-1">Card name</label>
         <input
           className="input mb-3"
@@ -151,8 +195,16 @@ export default function CreditCards() {
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
-          Add Credit Card
+          {editingId ? 'Update Credit Card' : 'Add Credit Card'}
         </ActionButton>
+      </BottomSheet>
+
+      <BottomSheet open={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} title="Delete Credit Card">
+        <p className="text-sm text-text-muted mb-4">Are you sure you want to delete this credit card?</p>
+        <div className="flex gap-3">
+          <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
+          <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
+        </div>
       </BottomSheet>
     </>
   );

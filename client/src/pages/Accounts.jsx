@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet, Smartphone, Banknote, Plus } from 'lucide-react';
+import { Wallet, Smartphone, Banknote, Plus, Pencil, Trash2 } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import TransactionFeed from '../components/TransactionFeed.jsx';
@@ -31,15 +31,26 @@ export default function Accounts() {
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('bank');
   const [newBalance, setNewBalance] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const accountTx = selected
     ? (transactions || []).filter((t) => t.account_id === selected.id)
     : [];
 
   const openAdd = () => {
+    setEditingId(null);
     setNewName('');
     setNewType('bank');
     setNewBalance('');
+    setAddOpen(true);
+  };
+
+  const openEdit = (account) => {
+    setEditingId(account.id);
+    setNewName(account.name);
+    setNewType(account.type);
+    setNewBalance(String(account.balance));
     setAddOpen(true);
   };
 
@@ -50,18 +61,38 @@ export default function Accounts() {
     }
     setAddLoading(true);
     try {
-      await api.post(apiPaths.accounts, {
-        name: newName.trim(),
-        type: newType,
-        balance: Number(newBalance) || 0,
-      });
+      if (editingId) {
+        await api.put(`${apiPaths.accounts}/${editingId}`, {
+          name: newName.trim(),
+          type: newType,
+          balance: Number(newBalance),
+        });
+        toast.push('Account updated', 'success');
+      } else {
+        await api.post(apiPaths.accounts, {
+          name: newName.trim(),
+          type: newType,
+          balance: Number(newBalance) || 0,
+        });
+        toast.push('Account added', 'success');
+      }
       await loadAll();
-      toast.push('Account added', 'success');
       setAddOpen(false);
     } catch (err) {
-      toast.push(err?.response?.data?.error || 'Failed to add account', 'error');
+      toast.push(err?.response?.data?.error || 'Failed to save account', 'error');
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`${apiPaths.accounts}/${id}`);
+      toast.push('Account deleted', 'success');
+      await loadAll();
+      setDeleteConfirm(null);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to delete account', 'error');
     }
   };
 
@@ -72,38 +103,56 @@ export default function Accounts() {
         {accounts.map((a) => {
           const Icon = ICONS[a.type] || Wallet;
           return (
-            <button
-              type="button"
-              key={a.id}
-              onClick={() => setSelected(selected?.id === a.id ? null : a)}
-              className="card w-full p-4 flex items-center gap-3 text-left"
-              style={{
-                borderColor: selected?.id === a.id ? 'var(--accent)' : 'var(--border)',
-              }}
-            >
-              <span
-                className="rounded-full flex items-center justify-center"
-                style={{
-                  width: 40, height: 40,
-                  background: 'var(--accent-soft)', color: 'var(--accent)',
-                }}
-              >
-                <Icon size={20} />
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="font-semibold truncate">{a.name}</div>
+            <div key={a.id} className="card p-4">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelected(selected?.id === a.id ? null : a)}
+                  className="flex-1 flex items-center gap-3 text-left"
+                >
                   <span
-                    className="text-[10px] uppercase rounded-full px-2 py-[2px]"
-                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                    className="rounded-full flex items-center justify-center"
+                    style={{
+                      width: 40, height: 40,
+                      background: 'var(--accent-soft)', color: 'var(--accent)',
+                    }}
                   >
-                    {a.type.replace('_', ' ')}
+                    <Icon size={20} />
                   </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="font-semibold truncate">{a.name}</div>
+                      <span
+                        className="text-[10px] uppercase rounded-full px-2 py-[2px]"
+                        style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                      >
+                        {a.type.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-text-muted">Added {fmtDate(a.created_at)}</div>
+                  </div>
+                  <div className="text-right font-mono text-base">{formatBDT(a.balance)}</div>
+                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(a)}
+                    className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(a.id)}
+                    className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                    style={{ color: 'var(--negative)' }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <div className="text-[11px] text-text-muted">Added {fmtDate(a.created_at)}</div>
               </div>
-              <div className="text-right font-mono text-base">{formatBDT(a.balance)}</div>
-            </button>
+            </div>
           );
         })}
 
@@ -115,7 +164,7 @@ export default function Accounts() {
         ) : null}
       </main>
 
-      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add Account">
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title={editingId ? 'Edit Account' : 'Add Account'}>
         <label className="block text-xs text-text-muted mb-1">Name</label>
         <input
           className="input mb-3"
@@ -143,8 +192,16 @@ export default function Accounts() {
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
-          Add Account
+          {editingId ? 'Update Account' : 'Add Account'}
         </ActionButton>
+      </BottomSheet>
+
+      <BottomSheet open={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} title="Delete Account">
+        <p className="text-sm text-text-muted mb-4">Are you sure you want to delete this account? This will also delete all associated transactions.</p>
+        <div className="flex gap-3">
+          <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
+          <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
+        </div>
       </BottomSheet>
     </>
   );

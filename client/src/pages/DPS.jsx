@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 import AppHeader from '../components/AppHeader.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
@@ -27,13 +27,26 @@ export default function DPS() {
   const [newMaturity, setNewMaturity] = useState('');
   const [newStartDate, setNewStartDate] = useState('');
   const [newMaturityDate, setNewMaturityDate] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const openAdd = () => {
+    setEditingId(null);
     setNewName('');
     setNewMonthly('');
     setNewMaturity('');
     setNewStartDate('');
     setNewMaturityDate('');
+    setAddOpen(true);
+  };
+
+  const openEdit = (d) => {
+    setEditingId(d.id);
+    setNewName(d.name);
+    setNewMonthly(String(d.monthly_amount));
+    setNewMaturity(d.maturity_amount ? String(d.maturity_amount) : '');
+    setNewStartDate(d.start_date || '');
+    setNewMaturityDate(d.maturity_date || '');
     setAddOpen(true);
   };
 
@@ -44,20 +57,42 @@ export default function DPS() {
     }
     setAddLoading(true);
     try {
-      await api.post(apiPaths.dps, {
-        name: newName.trim(),
-        monthly_amount: Number(newMonthly),
-        maturity_amount: newMaturity || null,
-        start_date: newStartDate || null,
-        maturity_date: newMaturityDate || null,
-      });
+      if (editingId) {
+        await api.put(`${apiPaths.dps}/${editingId}`, {
+          name: newName.trim(),
+          monthly_amount: Number(newMonthly),
+          maturity_amount: newMaturity || null,
+          start_date: newStartDate || null,
+          maturity_date: newMaturityDate || null,
+        });
+        toast.push('DPS updated', 'success');
+      } else {
+        await api.post(apiPaths.dps, {
+          name: newName.trim(),
+          monthly_amount: Number(newMonthly),
+          maturity_amount: newMaturity || null,
+          start_date: newStartDate || null,
+          maturity_date: newMaturityDate || null,
+        });
+        toast.push('DPS added', 'success');
+      }
       await loadAll();
-      toast.push('DPS added', 'success');
       setAddOpen(false);
     } catch (err) {
-      toast.push(err?.response?.data?.error || 'Failed to add DPS', 'error');
+      toast.push(err?.response?.data?.error || 'Failed to save DPS', 'error');
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleDelete = async (dpsId) => {
+    try {
+      await api.delete(`${apiPaths.dps}/${dpsId}`);
+      toast.push('DPS deleted', 'success');
+      await loadAll();
+      setDeleteConfirm(null);
+    } catch (err) {
+      toast.push(err?.response?.data?.error || 'Failed to delete DPS', 'error');
     }
   };
 
@@ -75,10 +110,30 @@ export default function DPS() {
           const days = daysUntil(d.maturity_date);
           return (
             <div key={d.id} className="card p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div className="font-semibold">{d.name}</div>
-                <div className="text-xs text-text-muted">
-                  {monthly ? `${formatBDT(monthly)} / month` : ''}
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-text-muted">
+                    {monthly ? `${formatBDT(monthly)} / month` : ''}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(d)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(d.id)}
+                      className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                      style={{ color: 'var(--negative)' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
@@ -111,7 +166,7 @@ export default function DPS() {
         })}
       </main>
 
-      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add DPS">
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title={editingId ? 'Edit DPS' : 'Add DPS'}>
         <label className="block text-xs text-text-muted mb-1">DPS name</label>
         <input
           className="input mb-3"
@@ -158,8 +213,16 @@ export default function DPS() {
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
-          Add DPS
+          {editingId ? 'Update DPS' : 'Add DPS'}
         </ActionButton>
+      </BottomSheet>
+
+      <BottomSheet open={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} title="Delete DPS">
+        <p className="text-sm text-text-muted mb-4">Are you sure you want to delete this DPS account?</p>
+        <div className="flex gap-3">
+          <ActionButton variant="ghost" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</ActionButton>
+          <ActionButton variant="negative" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</ActionButton>
+        </div>
       </BottomSheet>
     </>
   );

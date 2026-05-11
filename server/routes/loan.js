@@ -40,4 +40,58 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { name, principal, remaining, monthly_emi, interest_rate } = req.body;
+    const loanId = Number(req.params.id);
+    const [existing] = await pool.query('SELECT id FROM loans WHERE id = ? AND user_id = ?', [loanId, req.user.id]);
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Loan not found.' });
+    }
+    const updates = [];
+    const values = [];
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name.trim());
+    }
+    if (principal !== undefined) {
+      updates.push('principal = ?');
+      values.push(Number(principal));
+    }
+    if (remaining !== undefined) {
+      updates.push('remaining = ?');
+      values.push(Number(remaining));
+    }
+    if (monthly_emi !== undefined) {
+      updates.push('monthly_emi = ?');
+      values.push(Number(monthly_emi));
+    }
+    if (interest_rate !== undefined) {
+      updates.push('interest_rate = ?');
+      values.push(interest_rate || null);
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update.' });
+    }
+    values.push(loanId, req.user.id);
+    await pool.query(`UPDATE loans SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, values);
+    res.json({ message: 'Loan updated.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const loanId = Number(req.params.id);
+    const [result] = await pool.query('DELETE FROM loans WHERE id = ? AND user_id = ?', [loanId, req.user.id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Loan not found.' });
+    }
+    res.json({ message: 'Loan deleted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
