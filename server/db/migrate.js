@@ -144,6 +144,20 @@ const statements = [
     CONSTRAINT fk_income_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_income_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
+
+  `CREATE TABLE IF NOT EXISTS investments (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    type            VARCHAR(50) NOT NULL,
+    symbol          VARCHAR(20),
+    quantity        DECIMAL(15,4) NOT NULL,
+    buy_price       DECIMAL(12,2) NOT NULL,
+    current_price   DECIMAL(12,2),
+    buy_date        DATE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
 ];
 
 async function migrate() {
