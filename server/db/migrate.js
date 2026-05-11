@@ -4,12 +4,13 @@ const mysql = require('mysql2/promise');
 
 const statements = [
   `CREATE TABLE IF NOT EXISTS users (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    google_id   VARCHAR(100) UNIQUE NOT NULL,
-    name        VARCHAR(100),
-    email       VARCHAR(150) UNIQUE NOT NULL,
-    avatar_url  VARCHAR(500),
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    google_id     VARCHAR(100) UNIQUE NULL,
+    name          VARCHAR(100),
+    email         VARCHAR(150) UNIQUE NOT NULL,
+    avatar_url    VARCHAR(500),
+    password_hash VARCHAR(255) NULL,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
 
   `CREATE TABLE IF NOT EXISTS accounts (
@@ -93,6 +94,23 @@ async function migrate() {
   for (const sql of statements) {
     await conn.query(sql);
   }
+
+  // Idempotent schema upgrades for existing deployments.
+  const alterations = [
+    // Allow google_id to be NULL so email/password users can register.
+    `ALTER TABLE users MODIFY COLUMN google_id VARCHAR(100) NULL`,
+    // Add password_hash column for email/password auth.
+    `ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) NULL AFTER avatar_url`,
+  ];
+  for (const sql of alterations) {
+    try {
+      await conn.query(sql);
+    } catch (e) {
+      // ER_DUP_FIELDNAME (1060) = column already exists — safe to ignore.
+      if (e.errno !== 1060) throw e;
+    }
+  }
+
   // eslint-disable-next-line no-console
   console.log(`[migrate] ${statements.length} tables ensured`);
   await conn.end();

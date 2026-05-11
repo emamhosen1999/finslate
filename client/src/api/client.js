@@ -11,6 +11,8 @@ export const api = axios.create({
 export const apiPaths = {
   me: '/api/auth/me',
   googleLogin: '/api/auth/google',
+  register: '/api/auth/register',
+  loginEmail: '/api/auth/login/email',
   logout: '/api/auth/logout',
   summary: '/api/dashboard/summary',
   postSalary: '/api/actions/post-salary',
