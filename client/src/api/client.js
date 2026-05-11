@@ -33,6 +33,7 @@ export const apiPaths = {
   recurringDeposits: '/api/recurring-deposits',
   incomeSources: '/api/income-sources',
   investments: '/api/investments',
+  insurance: '/api/insurance',
   summary: '/api/dashboard/summary',
   postSalary: '/api/actions/post-salary',
   debtRepayment: '/api/actions/debt-repayment',

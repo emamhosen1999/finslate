@@ -158,6 +158,21 @@ const statements = [
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
+
+  `CREATE TABLE IF NOT EXISTS insurance_premiums (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    type            VARCHAR(50) NOT NULL,
+    provider        VARCHAR(100),
+    premium_amount  DECIMAL(12,2) NOT NULL,
+    frequency       VARCHAR(20) DEFAULT 'yearly',
+    next_due_date   DATE,
+    account_id      INT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_insurance_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_insurance_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
 ];
 
 async function migrate() {
