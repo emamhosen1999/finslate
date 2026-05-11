@@ -37,7 +37,6 @@ export const apiPaths = {
   cashback: '/api/cashback',
   analytics: '/api/analytics',
   summary: '/api/dashboard/summary',
-  postSalary: '/api/actions/post-salary',
   debtRepayment: '/api/actions/debt-repayment',
 };
 
