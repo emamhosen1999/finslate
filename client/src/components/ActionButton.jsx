@@ -6,6 +6,7 @@ export default function ActionButton({
   icon: Icon,
   children,
   className = '',
+  disabled = false,
   ...rest
 }) {
   const variantClass =
@@ -14,8 +15,8 @@ export default function ActionButton({
     <button
       type="button"
       className={`btn ${variantClass} ${className}`}
-      disabled={loading || rest.disabled}
       {...rest}
+      disabled={loading || disabled}
     >
       {loading ? <Loader2 className="animate-spin" size={18} /> : Icon ? <Icon size={18} /> : null}
       <span>{children}</span>

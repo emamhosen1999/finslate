@@ -15,7 +15,7 @@ const initialState = {
     totalCreditDues: 0,
     netWorth: 0,
   },
-  loading: false,
+  loading: true,
   error: null,
 };
 
@@ -81,7 +81,13 @@ export function FinanceProvider({ children }) {
   useEffect(() => {
     (async () => {
       const user = await loadMe();
-      if (user) await loadAll();
+      if (user) {
+        await loadAll();
+      } else {
+        // No authenticated user — clear the initial splash so AuthGate can
+        // route to /login instead of showing the skeleton forever.
+        dispatch({ type: 'PATCH', payload: { loading: false } });
+      }
     })();
   }, [loadMe, loadAll]);
 

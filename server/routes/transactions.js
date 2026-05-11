@@ -31,8 +31,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       args.push(String(req.query.from));
     }
     if (req.query.to) {
+      // <input type="date"> sends YYYY-MM-DD; widen it to end-of-day so the
+      // selected end date is inclusive of all transactions on that day.
       filters.push('t.created_at <= ?');
-      args.push(String(req.query.to));
+      args.push(`${String(req.query.to)} 23:59:59`);
     }
 
     const where = `WHERE ${filters.join(' AND ')}`;
