@@ -8,7 +8,7 @@
     "dev:server": "nodemon server/index.js",
     "dev:client": "cd client && vite",
     "build": "cd client && vite build",
-    "build:prod": "cd client && npm install && npm run build",
+    "build:prod": "cd client && npm install --include=dev && npm run build",
     "start": "node server/index.js",
     "migrate": "node server/db/migrate.js",
     "install:all": "npm install && cd client && npm install",
