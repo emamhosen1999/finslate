@@ -10,6 +10,10 @@ import CreditCards from './pages/CreditCards.jsx';
 import Loan from './pages/Loan.jsx';
 import DPS from './pages/DPS.jsx';
 import Transactions from './pages/Transactions.jsx';
+import Budgets from './pages/Budgets.jsx';
+import RecurringTransactions from './pages/RecurringTransactions.jsx';
+import FixedDeposits from './pages/FixedDeposits.jsx';
+import RecurringDeposits from './pages/RecurringDeposits.jsx';
 
 function AuthGate({ children }) {
   const { user, loading } = useFinance();
@@ -78,6 +82,38 @@ export default function App() {
           element={
             <AuthGate>
               <Transactions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/budgets"
+          element={
+            <AuthGate>
+              <Budgets />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/recurring"
+          element={
+            <AuthGate>
+              <RecurringTransactions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/fixed-deposits"
+          element={
+            <AuthGate>
+              <FixedDeposits />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/recurring-deposits"
+          element={
+            <AuthGate>
+              <RecurringDeposits />
             </AuthGate>
           }
         />

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Wallet, CreditCard, Landmark, PiggyBank } from 'lucide-react';
+import { Home, Wallet, CreditCard, Landmark, PiggyBank, Target, Repeat, Lock, TrendingUp } from 'lucide-react';
 
 const tabs = [
   { to: '/', label: 'Dashboard', icon: Home, end: true },
@@ -7,6 +7,10 @@ const tabs = [
   { to: '/cards', label: 'Cards', icon: CreditCard },
   { to: '/loan', label: 'Loan', icon: Landmark },
   { to: '/dps', label: 'DPS', icon: PiggyBank },
+  { to: '/budgets', label: 'Budgets', icon: Target },
+  { to: '/recurring', label: 'Recurring', icon: Repeat },
+  { to: '/fixed-deposits', label: 'FD', icon: Lock },
+  { to: '/recurring-deposits', label: 'RD', icon: TrendingUp },
 ];
 
 export default function BottomNav() {

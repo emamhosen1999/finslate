@@ -74,6 +74,62 @@ const statements = [
     CONSTRAINT fk_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_tx_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
+
+  `CREATE TABLE IF NOT EXISTS budgets (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL,
+    category    VARCHAR(100) NOT NULL,
+    amount      DECIMAL(15,2) NOT NULL,
+    period      VARCHAR(20) DEFAULT 'monthly',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_budgets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS recurring_transactions (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    account_id      INT,
+    name            VARCHAR(100) NOT NULL,
+    type            ENUM('credit','debit') NOT NULL,
+    amount          DECIMAL(12,2) NOT NULL,
+    category        VARCHAR(80) NOT NULL,
+    description     VARCHAR(255),
+    frequency       ENUM('daily','weekly','monthly','yearly') NOT NULL,
+    start_date      DATE NOT NULL,
+    end_date        DATE,
+    last_processed  DATE,
+    next_due        DATE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_recurring_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_recurring_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS fixed_deposits (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    principal       DECIMAL(12,2) NOT NULL,
+    interest_rate   DECIMAL(5,2) NOT NULL,
+    start_date      DATE NOT NULL,
+    maturity_date   DATE NOT NULL,
+    maturity_amount DECIMAL(12,2),
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_fd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS recurring_deposits (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    monthly_amount  DECIMAL(12,2) NOT NULL,
+    interest_rate   DECIMAL(5,2) NOT NULL,
+    total_deposited DECIMAL(12,2) DEFAULT 0.00,
+    maturity_amount DECIMAL(12,2),
+    start_date      DATE,
+    maturity_date   DATE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
 ];
 
 async function migrate() {

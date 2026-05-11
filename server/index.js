@@ -70,6 +70,10 @@ async function start() {
   app.use('/api/credit-cards', require('./routes/creditCards'));
   app.use('/api/loans', require('./routes/loan'));
   app.use('/api/dps', require('./routes/dps'));
+  app.use('/api/budgets', require('./routes/budgets'));
+  app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
+  app.use('/api/fixed-deposits', require('./routes/fixedDeposits'));
+  app.use('/api/recurring-deposits', require('./routes/recurringDeposits'));
   app.use('/api/actions', require('./routes/actions'));
 
   // Serve the built client when present (single-process deploy, e.g. Replit/Fly).
