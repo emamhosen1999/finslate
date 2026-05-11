@@ -14,6 +14,7 @@ import Budgets from './pages/Budgets.jsx';
 import RecurringTransactions from './pages/RecurringTransactions.jsx';
 import FixedDeposits from './pages/FixedDeposits.jsx';
 import RecurringDeposits from './pages/RecurringDeposits.jsx';
+import IncomeSources from './pages/IncomeSources.jsx';
 
 function AuthGate({ children }) {
   const { user, loading } = useFinance();
@@ -114,6 +115,14 @@ export default function App() {
           element={
             <AuthGate>
               <RecurringDeposits />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/income"
+          element={
+            <AuthGate>
+              <IncomeSources />
             </AuthGate>
           }
         />
