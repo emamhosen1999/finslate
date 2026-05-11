@@ -18,6 +18,7 @@ import IncomeSources from './pages/IncomeSources.jsx';
 import Investments from './pages/Investments.jsx';
 import Insurance from './pages/Insurance.jsx';
 import Cashback from './pages/Cashback.jsx';
+import Analytics from './pages/Analytics.jsx';
 
 function AuthGate({ children }) {
   const { user, loading } = useFinance();
@@ -150,6 +151,14 @@ export default function App() {
           element={
             <AuthGate>
               <Cashback />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <AuthGate>
+              <Analytics />
             </AuthGate>
           }
         />

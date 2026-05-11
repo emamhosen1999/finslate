@@ -78,6 +78,7 @@ async function start() {
   app.use('/api/investments', require('./routes/investments'));
   app.use('/api/insurance', require('./routes/insurance'));
   app.use('/api/cashback', require('./routes/cashback'));
+  app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
 
   // Serve the built client when present (single-process deploy, e.g. Replit/Fly).

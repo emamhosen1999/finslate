@@ -35,6 +35,7 @@ export const apiPaths = {
   investments: '/api/investments',
   insurance: '/api/insurance',
   cashback: '/api/cashback',
+  analytics: '/api/analytics',
   summary: '/api/dashboard/summary',
   postSalary: '/api/actions/post-salary',
   debtRepayment: '/api/actions/debt-repayment',
