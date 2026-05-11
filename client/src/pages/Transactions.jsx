@@ -146,7 +146,15 @@ export default function Transactions() {
 
   return (
     <>
-      <AppHeader title="Transactions" action={<button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>} />
+      <AppHeader
+        title="Transactions"
+        action={
+          <div className="flex gap-2">
+            <ExportCSV transactions={filtered} label="Export" />
+            <button type="button" onClick={openAdd} className="btn btn-primary text-xs py-2 px-3"><Plus size={14} /> Add</button>
+          </div>
+        }
+      />
       <main className="px-4 pt-3">
         <div className="card p-3 space-y-2">
           <div className="flex items-center gap-2">
