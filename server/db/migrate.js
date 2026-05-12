@@ -958,6 +958,13 @@ const statements = [
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_user_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
+
+  `CREATE TABLE IF NOT EXISTS sessions (
+    session_id VARCHAR(128) NOT NULL PRIMARY KEY,
+    expires BIGINT NOT NULL,
+    data TEXT NULL
+  )`,
+
 ];
 
 async function migrate() {
