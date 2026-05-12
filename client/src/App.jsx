@@ -16,6 +16,10 @@ import FixedDeposits from './pages/FixedDeposits.jsx';
 import IncomeSources from './pages/IncomeSources.jsx';
 import Investments from './pages/Investments.jsx';
 import Insurance from './pages/Insurance.jsx';
+import Sanchayapatra from './pages/Sanchayapatra.jsx';
+import PersonalLending from './pages/PersonalLending.jsx';
+import NetWorth from './pages/NetWorth.jsx';
+import Notifications from './pages/Notifications.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Profile from './pages/Profile.jsx';
 
@@ -134,6 +138,38 @@ export default function App() {
           element={
             <AuthGate>
               <Insurance />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/sanchayapatra"
+          element={
+            <AuthGate>
+              <Sanchayapatra />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/personal-lending"
+          element={
+            <AuthGate>
+              <PersonalLending />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/net-worth"
+          element={
+            <AuthGate>
+              <NetWorth />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <AuthGate>
+              <Notifications />
             </AuthGate>
           }
         />

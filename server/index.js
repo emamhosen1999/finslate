@@ -77,6 +77,10 @@ async function start() {
   app.use('/api/income-sources', require('./routes/incomeSources'));
   app.use('/api/investments', require('./routes/investments'));
   app.use('/api/insurance', require('./routes/insurance'));
+  app.use('/api/sanchayapatra', require('./routes/sanchayapatra'));
+  app.use('/api/personal-lending', require('./routes/personalLending'));
+  app.use('/api/net-worth', require('./routes/netWorth'));
+  app.use('/api/notifications', require('./routes/notifications'));
   app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
 

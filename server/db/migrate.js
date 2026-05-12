@@ -249,6 +249,96 @@ const statements = [
     CONSTRAINT fk_categories_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_categories_parent FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
   )`,
+
+  `CREATE TABLE IF NOT EXISTS sanchayapatra (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id             INT NOT NULL,
+    name                VARCHAR(100) NOT NULL,
+    scheme_type         ENUM('3_month_profit','5_year_bangladesh','family_savings','pensioner','wage_earner') NOT NULL,
+    certificate_number VARCHAR(100) NOT NULL,
+    principal_amount    DECIMAL(15,2) NOT NULL,
+    interest_rate       DECIMAL(5,2) NOT NULL,
+    purchase_date       DATE NOT NULL,
+    maturity_date       DATE NOT NULL,
+    maturity_value      DECIMAL(15,2) NULL,
+    status              ENUM('active','matured','encashed') DEFAULT 'active',
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sanchayapatra_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS sanchayapatra_interest_payments (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    sanchayapatra_id    INT NOT NULL,
+    payment_date        DATE NOT NULL,
+    amount              DECIMAL(15,2) NOT NULL,
+    cumulative_interest DECIMAL(15,2) NOT NULL,
+    cumulative_value    DECIMAL(15,2) NOT NULL,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sip_sanchayapatra FOREIGN KEY (sanchayapatra_id) REFERENCES sanchayapatra(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS personal_lendings (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id             INT NOT NULL,
+    direction           ENUM('lent','borrowed') NOT NULL,
+    counterparty_name   VARCHAR(100) NOT NULL,
+    counterparty_contact VARCHAR(50) NULL,
+    principal_amount    DECIMAL(15,2) NOT NULL,
+    outstanding_balance DECIMAL(15,2) NOT NULL,
+    interest_rate       DECIMAL(5,2) NULL,
+    start_date          DATE NOT NULL,
+    due_date            DATE NULL,
+    status              ENUM('active','settled','partial') DEFAULT 'active',
+    notes               TEXT NULL,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_personal_lendings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS lending_repayments (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    lending_id          INT NOT NULL,
+    repayment_date      DATE NOT NULL,
+    amount              DECIMAL(15,2) NOT NULL,
+    notes               TEXT NULL,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_lr_lending FOREIGN KEY (lending_id) REFERENCES personal_lendings(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id             INT NOT NULL,
+    snapshot_date       DATE NOT NULL,
+    total_assets        DECIMAL(15,2) NOT NULL,
+    total_liabilities   DECIMAL(15,2) NOT NULL,
+    net_worth          DECIMAL(15,2) NOT NULL,
+    account_balance     DECIMAL(15,2) DEFAULT 0,
+    dps_value           DECIMAL(15,2) DEFAULT 0,
+    fixed_deposit_value DECIMAL(15,2) DEFAULT 0,
+    sanchayapatra_value DECIMAL(15,2) DEFAULT 0,
+    investment_value    DECIMAL(15,2) DEFAULT 0,
+    lending_value       DECIMAL(15,2) DEFAULT 0,
+    credit_card_debt    DECIMAL(15,2) DEFAULT 0,
+    loan_balance        DECIMAL(15,2) DEFAULT 0,
+    personal_lending_balance DECIMAL(15,2) DEFAULT 0,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_nws_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_user_date (user_id, snapshot_date)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    type            ENUM('info','warning','error','success') NOT NULL,
+    title           VARCHAR(200) NOT NULL,
+    message         TEXT NOT NULL,
+    entity_type     VARCHAR(50) NULL,
+    entity_id       INT NULL,
+    is_read         BOOLEAN DEFAULT FALSE,
+    action_url      VARCHAR(500) NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_read (user_id, is_read)
+  )`,
 ];
 
 async function migrate() {
