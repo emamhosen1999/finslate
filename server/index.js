@@ -66,6 +66,7 @@ async function start() {
   app.use('/api/auth', require('./routes/auth'));
   app.use('/api/dashboard', require('./routes/dashboard'));
   app.use('/api/accounts', require('./routes/accounts'));
+  app.use('/api/transfers', require('./routes/transfers'));
   app.use('/api/transactions', require('./routes/transactions'));
   app.use('/api/credit-cards', require('./routes/creditCards'));
   app.use('/api/loans', require('./routes/loan'));
@@ -73,11 +74,9 @@ async function start() {
   app.use('/api/budgets', require('./routes/budgets'));
   app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
   app.use('/api/fixed-deposits', require('./routes/fixedDeposits'));
-  app.use('/api/recurring-deposits', require('./routes/recurringDeposits'));
   app.use('/api/income-sources', require('./routes/incomeSources'));
   app.use('/api/investments', require('./routes/investments'));
   app.use('/api/insurance', require('./routes/insurance'));
-  app.use('/api/cashback', require('./routes/cashback'));
   app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
 

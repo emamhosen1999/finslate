@@ -15,6 +15,7 @@ export const apiPaths = {
   loginEmail: '/api/auth/login/email',
   logout: '/api/auth/logout',
   accounts: '/api/accounts',
+  transfers: '/api/transfers',
   transactions: '/api/transactions',
   transactionsList: (params = {}) => {
     const search = new URLSearchParams();

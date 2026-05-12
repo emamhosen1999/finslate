@@ -121,11 +121,12 @@ export default function Accounts() {
     }
     setTransferLoading(true);
     try {
-      await api.post(`${apiPaths.accounts}/transfer`, {
+      await api.post(apiPaths.transfers, {
         from_account_id: Number(fromAccountId),
         to_account_id: Number(toAccountId),
         amount: Number(transferAmount),
-        description: transferDescription || null,
+        note: transferDescription || null,
+        transfer_date: new Date().toISOString().split('T')[0],
       });
       toast.push('Transfer successful', 'success');
       await loadAll();

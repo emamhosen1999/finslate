@@ -17,6 +17,7 @@ import IncomeSources from './pages/IncomeSources.jsx';
 import Investments from './pages/Investments.jsx';
 import Insurance from './pages/Insurance.jsx';
 import Analytics from './pages/Analytics.jsx';
+import Profile from './pages/Profile.jsx';
 
 function AuthGate({ children }) {
   const { user, loading } = useFinance();
@@ -141,6 +142,14 @@ export default function App() {
           element={
             <AuthGate>
               <Analytics />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <AuthGate>
+              <Profile />
             </AuthGate>
           }
         />

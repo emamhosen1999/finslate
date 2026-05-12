@@ -102,10 +102,39 @@ router.post('/login/email', async (req, res, next) => {
 
 router.get('/me', (req, res) => {
   if (req.isAuthenticated && req.isAuthenticated() && req.user) {
-    const { id, name, email, avatar_url: avatarUrl } = req.user;
-    return res.json({ user: { id, name, email, avatarUrl } });
+    const { id, name, email, avatar_url: avatarUrl, timezone, date_format, financial_year_start, tin_number, nid_number } = req.user;
+    return res.json({ user: { id, name, email, avatarUrl, timezone, date_format, financial_year_start, tin_number, nid_number } });
   }
   return res.json({ user: null });
+});
+
+router.put('/profile', async (req, res, next) => {
+  try {
+    if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { timezone, date_format, financial_year_start, tin_number, nid_number } = req.body;
+    const userId = req.user.id;
+
+    await pool.query(
+      `UPDATE users SET timezone = ?, date_format = ?, financial_year_start = ?, tin_number = ?, nid_number = ? WHERE id = ?`,
+      [timezone || 'Asia/Dhaka', date_format || 'DD/MM/YYYY', financial_year_start || 7, tin_number || null, nid_number || null, userId]
+    );
+
+    // Update session user data
+    const [rows] = await pool.query(
+      'SELECT id, name, email, avatar_url, timezone, date_format, financial_year_start, tin_number, nid_number FROM users WHERE id = ?',
+      [userId]
+    );
+    if (rows.length) {
+      req.user = rows[0];
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/logout', (req, res, next) => {
