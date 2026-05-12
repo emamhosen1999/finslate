@@ -43,6 +43,8 @@ export const apiPaths = {
   providentFund: '/api/provident-fund',
   taxRecords: '/api/tax-records',
   goals: '/api/goals',
+  currencies: '/api/currencies',
+  reports: '/api/reports',
   analytics: '/api/analytics',
   summary: '/api/dashboard/summary',
   debtRepayment: '/api/actions/debt-repayment',

@@ -428,6 +428,45 @@ const statements = [
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_gc_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
   )`,
+
+  // Add currency column to accounts
+  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'BDT' AFTER balance`,
+
+  // Add currency column to transactions
+  `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'BDT' AFTER amount`,
+
+  // Insert default currencies
+  `INSERT IGNORE INTO currencies (code, name, symbol, is_default) VALUES ('BDT', 'Bangladeshi Taka', '৳', TRUE), ('USD', 'US Dollar', '$', FALSE), ('EUR', 'Euro', '€', FALSE), ('GBP', 'British Pound', '£', FALSE)`,
+
+  // Insert default exchange rates (BDT as base)
+  `INSERT IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('BDT', 'USD', 0.0091), ('BDT', 'EUR', 0.0084), ('BDT', 'GBP', 0.0072), ('USD', 'BDT', 110.0), ('EUR', 'BDT', 119.0), ('GBP', 'BDT', 139.0)`,
+
+  `CREATE TABLE IF NOT EXISTS currencies (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(3) NOT NULL UNIQUE,
+    name            VARCHAR(50) NOT NULL,
+    symbol          VARCHAR(5) NOT NULL,
+    is_default      BOOLEAN DEFAULT FALSE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS exchange_rates (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    from_currency   VARCHAR(3) NOT NULL,
+    to_currency     VARCHAR(3) NOT NULL,
+    rate            DECIMAL(10,6) NOT NULL,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_currency_pair (from_currency, to_currency)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS reports (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    type            VARCHAR(50) NOT NULL,
+    parameters      TEXT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reports_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
 ];
 
 async function migrate() {

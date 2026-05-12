@@ -86,6 +86,8 @@ async function start() {
   app.use('/api/provident-fund', require('./routes/providentFund'));
   app.use('/api/tax-records', require('./routes/taxRecords'));
   app.use('/api/goals', require('./routes/goals'));
+  app.use('/api/currencies', require('./routes/currencies'));
+  app.use('/api/reports', require('./routes/reports'));
   app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
 
