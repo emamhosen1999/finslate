@@ -429,18 +429,6 @@ const statements = [
     CONSTRAINT fk_gc_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
   )`,
 
-  // Add currency column to accounts
-  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'BDT' AFTER balance`,
-
-  // Add currency column to transactions
-  `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'BDT' AFTER amount`,
-
-  // Insert default currencies
-  `INSERT IGNORE INTO currencies (code, name, symbol, is_default) VALUES ('BDT', 'Bangladeshi Taka', '৳', TRUE), ('USD', 'US Dollar', '$', FALSE), ('EUR', 'Euro', '€', FALSE), ('GBP', 'British Pound', '£', FALSE)`,
-
-  // Insert default exchange rates (BDT as base)
-  `INSERT IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('BDT', 'USD', 0.0091), ('BDT', 'EUR', 0.0084), ('BDT', 'GBP', 0.0072), ('USD', 'BDT', 110.0), ('EUR', 'BDT', 119.0), ('GBP', 'BDT', 139.0)`,
-
   `CREATE TABLE IF NOT EXISTS currencies (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     code            VARCHAR(3) NOT NULL UNIQUE,
@@ -457,6 +445,27 @@ const statements = [
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_currency_pair (from_currency, to_currency)
   )`,
+
+  // Add currency column to accounts (MySQL doesn't support ADD COLUMN IF NOT EXISTS)
+  // Check if column exists first, then add if needed
+  `SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'currency')`,
+  `SET @sql = IF(@col_exists = 0, 'ALTER TABLE accounts ADD COLUMN currency VARCHAR(3) DEFAULT ''BDT'' AFTER balance', 'SELECT ''Column already exists'' AS message')`,
+  `PREPARE stmt FROM @sql`,
+  `EXECUTE stmt`,
+  `DEALLOCATE PREPARE stmt`,
+
+  // Add currency column to transactions
+  `SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'currency')`,
+  `SET @sql = IF(@col_exists = 0, 'ALTER TABLE transactions ADD COLUMN currency VARCHAR(3) DEFAULT ''BDT'' AFTER amount', 'SELECT ''Column already exists'' AS message')`,
+  `PREPARE stmt FROM @sql`,
+  `EXECUTE stmt`,
+  `DEALLOCATE PREPARE stmt`,
+
+  // Insert default currencies
+  `INSERT IGNORE INTO currencies (code, name, symbol, is_default) VALUES ('BDT', 'Bangladeshi Taka', '৳', TRUE), ('USD', 'US Dollar', '$', FALSE), ('EUR', 'Euro', '€', FALSE), ('GBP', 'British Pound', '£', FALSE)`,
+
+  // Insert default exchange rates (BDT as base)
+  `INSERT IGNORE INTO exchange_rates (from_currency, to_currency, rate) VALUES ('BDT', 'USD', 0.0091), ('BDT', 'EUR', 0.0084), ('BDT', 'GBP', 0.0072), ('USD', 'BDT', 110.0), ('EUR', 'BDT', 119.0), ('GBP', 'BDT', 139.0)`,
 
   `CREATE TABLE IF NOT EXISTS reports (
     id              INT AUTO_INCREMENT PRIMARY KEY,
