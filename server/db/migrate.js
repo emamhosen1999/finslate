@@ -339,6 +339,95 @@ const statements = [
     CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_read (user_id, is_read)
   )`,
+
+  `CREATE TABLE IF NOT EXISTS bills (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    type            VARCHAR(50) NOT NULL,
+    provider        VARCHAR(100),
+    amount          DECIMAL(12,2) NOT NULL,
+    due_date        DATE NOT NULL,
+    frequency       VARCHAR(20) DEFAULT 'monthly',
+    account_id      INT,
+    status          ENUM('pending','paid','overdue') DEFAULT 'pending',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_bills_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bills_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS subscriptions (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    service_name    VARCHAR(100),
+    amount          DECIMAL(12,2) NOT NULL,
+    billing_cycle   VARCHAR(20) DEFAULT 'monthly',
+    start_date      DATE NOT NULL,
+    next_billing    DATE NOT NULL,
+    account_id      INT,
+    status          ENUM('active','cancelled','paused') DEFAULT 'active',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_subscriptions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_subscriptions_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS provident_fund (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    employer_name   VARCHAR(100) NOT NULL,
+    employee_id     VARCHAR(50),
+    monthly_contribution DECIMAL(12,2) NOT NULL,
+    employer_contribution DECIMAL(12,2) NOT NULL,
+    start_date      DATE NOT NULL,
+    account_id      INT,
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pf_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_pf_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS tax_records (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    tax_year        YEAR NOT NULL,
+    income_type     VARCHAR(50) NOT NULL,
+    gross_income    DECIMAL(15,2) NOT NULL,
+    tax_deducted    DECIMAL(15,2) DEFAULT 0,
+    tax_paid        DECIMAL(15,2) DEFAULT 0,
+    tax_due         DECIMAL(15,2) NOT NULL,
+    status          ENUM('pending','filed','paid') DEFAULT 'pending',
+    filing_date     DATE NULL,
+    payment_date    DATE NULL,
+    notes           TEXT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tax_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_user_year (user_id, tax_year)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS goals (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    name            VARCHAR(100) NOT NULL,
+    category        VARCHAR(50) NOT NULL,
+    target_amount   DECIMAL(15,2) NOT NULL,
+    current_amount  DECIMAL(15,2) DEFAULT 0,
+    target_date     DATE NOT NULL,
+    status          ENUM('active','completed','paused') DEFAULT 'active',
+    notes           TEXT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS goal_contributions (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    goal_id         INT NOT NULL,
+    amount          DECIMAL(15,2) NOT NULL,
+    contribution_date DATE NOT NULL,
+    notes           TEXT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_gc_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+  )`,
 ];
 
 async function migrate() {

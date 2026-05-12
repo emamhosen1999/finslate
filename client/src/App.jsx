@@ -20,6 +20,11 @@ import Sanchayapatra from './pages/Sanchayapatra.jsx';
 import PersonalLending from './pages/PersonalLending.jsx';
 import NetWorth from './pages/NetWorth.jsx';
 import Notifications from './pages/Notifications.jsx';
+import Bills from './pages/Bills.jsx';
+import Subscriptions from './pages/Subscriptions.jsx';
+import ProvidentFund from './pages/ProvidentFund.jsx';
+import TaxRecords from './pages/TaxRecords.jsx';
+import Goals from './pages/Goals.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Profile from './pages/Profile.jsx';
 
@@ -170,6 +175,46 @@ export default function App() {
           element={
             <AuthGate>
               <Notifications />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/bills"
+          element={
+            <AuthGate>
+              <Bills />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/subscriptions"
+          element={
+            <AuthGate>
+              <Subscriptions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/provident-fund"
+          element={
+            <AuthGate>
+              <ProvidentFund />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/tax-records"
+          element={
+            <AuthGate>
+              <TaxRecords />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/goals"
+          element={
+            <AuthGate>
+              <Goals />
             </AuthGate>
           }
         />

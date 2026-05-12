@@ -81,6 +81,11 @@ async function start() {
   app.use('/api/personal-lending', require('./routes/personalLending'));
   app.use('/api/net-worth', require('./routes/netWorth'));
   app.use('/api/notifications', require('./routes/notifications'));
+  app.use('/api/bills', require('./routes/bills'));
+  app.use('/api/subscriptions', require('./routes/subscriptions'));
+  app.use('/api/provident-fund', require('./routes/providentFund'));
+  app.use('/api/tax-records', require('./routes/taxRecords'));
+  app.use('/api/goals', require('./routes/goals'));
   app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
 
