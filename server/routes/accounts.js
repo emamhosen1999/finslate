@@ -20,12 +20,12 @@ router.get('/:id/transactions', requireAuth, async (req, res, next) => {
   try {
     const accountId = Number(req.params.id);
     const [rows] = await pool.query(
-      `SELECT t.id, t.account_id, a.name AS account_name, t.type, t.amount, t.category,
-              t.description, t.ref_type, t.ref_id, t.created_at
+      `SELECT t.id, t.account_id, a.name AS account_name, t.type, t.amount, t.currency,
+              t.transaction_date, t.category_id, t.payee, t.notes, t.reference_no, t.created_at
          FROM transactions t
          LEFT JOIN accounts a ON a.id = t.account_id
         WHERE t.user_id = ? AND t.account_id = ?
-        ORDER BY t.created_at DESC, t.id DESC`,
+        ORDER BY t.transaction_date DESC, t.id DESC`,
       [req.user.id, accountId],
     );
     res.json({ transactions: rows });
@@ -195,12 +195,14 @@ router.post('/transfer', requireAuth, async (req, res, next) => {
       [transferAmount, Number(to_account_id), req.user.id],
     );
     await connection.query(
-      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, Number(from_account_id), 'debit', transferAmount, 'Transfer', description || `Transfer to ${toAccount[0].name}`],
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes)
+       VALUES (?, ?, 'transfer_debit', ?, 'BDT', CURDATE(), 'Transfer', 'account', ?, ?)`,
+      [req.user.id, Number(from_account_id), transferAmount, toAccount[0].name, description || `Transfer to ${toAccount[0].name}`],
     );
     await connection.query(
-      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, Number(to_account_id), 'credit', transferAmount, 'Transfer', description || `Transfer from ${fromAccount[0].name}`],
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes)
+       VALUES (?, ?, 'transfer_credit', ?, 'BDT', CURDATE(), 'Transfer', 'account', ?, ?)`,
+      [req.user.id, Number(to_account_id), transferAmount, fromAccount[0].name, description || `Transfer from ${fromAccount[0].name}`],
     );
     await connection.commit();
     res.json({ message: 'Transfer successful.' });

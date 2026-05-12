@@ -20,14 +20,14 @@ export default function TransactionFeed({ transactions, emptyMessage = 'No trans
   return (
     <ul className="card divide-y" style={{ borderColor: 'var(--border)' }}>
       {transactions.map((t) => {
-        const positive = t.type === 'credit';
+        const positive = t.type === 'income' || t.type === 'transfer_credit';
         return (
           <li key={t.id} className="flex items-center gap-3 p-3" style={{ borderColor: 'var(--border)' }}>
-            <CategoryIcon category={t.category} />
+            <CategoryIcon category={t.category_id} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{t.description || t.category}</div>
+              <div className="text-sm font-medium truncate">{t.payee || t.notes || t.category_id || '—'}</div>
               <div className="text-[11px] text-text-muted truncate">
-                {t.account_name || '—'} · {fmtDate(t.created_at)}
+                {t.account_name || '—'} · {fmtDate(t.transaction_date)}
               </div>
             </div>
             <div

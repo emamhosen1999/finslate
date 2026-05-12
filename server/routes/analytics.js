@@ -6,31 +6,23 @@ const requireAuth = require('../middleware/requireAuth');
 router.get('/overview', requireAuth, async (req, res, next) => {
   try {
     const [incomeResult] = await pool.query(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = "credit"',
+      'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = "income" AND deleted_at IS NULL',
       [req.user.id],
     );
     const [expenseResult] = await pool.query(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = "debit"',
+      'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = "expense" AND deleted_at IS NULL',
       [req.user.id],
     );
     const [accountResult] = await pool.query(
-      'SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_balance), 0) as total FROM accounts WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id],
     );
     const [investmentResult] = await pool.query(
-      'SELECT COALESCE(SUM(quantity * current_price), 0) as total FROM investments WHERE user_id = ? AND current_price IS NOT NULL',
+      'SELECT COALESCE(SUM(quantity_held * current_price), 0) as total FROM investments WHERE user_id = ? AND current_price IS NOT NULL AND status = "active"',
       [req.user.id],
     );
     const [fdResult] = await pool.query(
-      'SELECT COALESCE(SUM(maturity_amount), 0) as total FROM fixed_deposits WHERE user_id = ? AND maturity_amount IS NOT NULL',
-      [req.user.id],
-    );
-    const [rdResult] = await pool.query(
-      'SELECT COALESCE(SUM(maturity_amount), 0) as total FROM recurring_deposits WHERE user_id = ? AND maturity_amount IS NOT NULL',
-      [req.user.id],
-    );
-    const [cashbackResult] = await pool.query(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM cashback_rewards WHERE user_id = ?',
+      'SELECT COALESCE(SUM(projected_maturity_value), 0) as total FROM fixed_deposits WHERE user_id = ? AND deleted_at IS NULL AND status = "active"',
       [req.user.id],
     );
     res.json({
@@ -39,8 +31,6 @@ router.get('/overview', requireAuth, async (req, res, next) => {
       totalAccounts: Number(accountResult[0].total),
       totalInvestments: Number(investmentResult[0].total),
       totalFD: Number(fdResult[0].total),
-      totalRD: Number(rdResult[0].total),
-      totalCashback: Number(cashbackResult[0].total),
     });
   } catch (err) {
     next(err);
@@ -50,7 +40,9 @@ router.get('/overview', requireAuth, async (req, res, next) => {
 router.get('/category-spending', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      'SELECT category, SUM(amount) as total FROM transactions WHERE user_id = ? AND type = "debit" GROUP BY category ORDER BY total DESC LIMIT 10',
+      `SELECT category_id, SUM(amount) as total FROM transactions
+       WHERE user_id = ? AND type = 'expense' AND deleted_at IS NULL
+       GROUP BY category_id ORDER BY total DESC LIMIT 10`,
       [req.user.id],
     );
     res.json(rows);
@@ -62,7 +54,12 @@ router.get('/category-spending', requireAuth, async (req, res, next) => {
 router.get('/monthly-trend', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      'SELECT DATE_FORMAT(date, "%Y-%m") as month, SUM(CASE WHEN type = "credit" THEN amount ELSE 0 END) as income, SUM(CASE WHEN type = "debit" THEN amount ELSE 0 END) as expense FROM transactions WHERE user_id = ? GROUP BY DATE_FORMAT(date, "%Y-%m") ORDER BY month DESC LIMIT 12',
+      `SELECT DATE_FORMAT(transaction_date, '%Y-%m') as month,
+              SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+              SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+       FROM transactions WHERE user_id = ? AND deleted_at IS NULL
+       GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
+       ORDER BY month DESC LIMIT 12`,
       [req.user.id],
     );
     res.json(rows);
@@ -88,15 +85,17 @@ router.get('/net-worth-trend', requireAuth, async (req, res, next) => {
 router.get('/debt-summary', requireAuth, async (req, res, next) => {
   try {
     const [creditCardResult] = await pool.query(
-      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM credit_cards WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_outstanding), 0) as total FROM credit_cards WHERE user_id = ? AND is_active = 1',
       [req.user.id],
     );
     const [loanResult] = await pool.query(
-      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM loans WHERE user_id = ?',
+      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM loans WHERE user_id = ? AND status = "active"',
       [req.user.id],
     );
     const [personalLendingResult] = await pool.query(
-      'SELECT COALESCE(SUM(CASE WHEN direction = "borrowed" THEN amount - COALESCE((SELECT SUM(amount) FROM lending_repayments WHERE lending_repayments.lending_id = personal_lendings.id), 0) ELSE 0 END), 0) as total FROM personal_lendings WHERE user_id = ? AND direction = "borrowed"',
+      `SELECT COALESCE(SUM(pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)), 0) as total
+       FROM personal_lendings pl
+       WHERE pl.user_id = ? AND pl.direction = 'borrowed' AND pl.status IN ('outstanding','partially_repaid')`,
       [req.user.id],
     );
     res.json({
@@ -163,14 +162,16 @@ router.get('/goal-summary', requireAuth, async (req, res, next) => {
       [req.user.id],
     );
     const [summaryResult] = await pool.query(
-      'SELECT COUNT(*) as total, SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed, COALESCE(SUM(target_amount), 0) as total_target, COALESCE(SUM(current_amount), 0) as total_saved FROM goals WHERE user_id = ?',
+      `SELECT COUNT(*) as total, SUM(CASE WHEN status = 'achieved' THEN 1 ELSE 0 END) as achieved,
+              COALESCE(SUM(target_amount), 0) as total_target, COALESCE(SUM(current_amount), 0) as total_saved
+       FROM goals WHERE user_id = ?`,
       [req.user.id],
     );
     res.json({
       goals: rows,
       summary: {
         total: summaryResult[0].total,
-        completed: summaryResult[0].completed,
+        achieved: summaryResult[0].achieved,
         totalTarget: Number(summaryResult[0].total_target),
         totalSaved: Number(summaryResult[0].total_saved),
       },
@@ -184,11 +185,14 @@ router.get('/goal-summary', requireAuth, async (req, res, next) => {
 router.get('/investment-performance', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      'SELECT name, type, quantity, purchase_price, current_price, purchase_date FROM investments WHERE user_id = ?',
+      `SELECT symbol, type, quantity_held, average_buy_price, current_price, total_invested, realized_gain_loss
+       FROM investments WHERE user_id = ? AND status = 'active'`,
       [req.user.id],
     );
     const [summaryResult] = await pool.query(
-      'SELECT COALESCE(SUM(quantity * purchase_price), 0) as total_invested, COALESCE(SUM(quantity * current_price), 0) as total_current FROM investments WHERE user_id = ? AND current_price IS NOT NULL',
+      `SELECT COALESCE(SUM(total_invested), 0) as total_invested,
+              COALESCE(SUM(quantity_held * current_price), 0) as total_current
+       FROM investments WHERE user_id = ? AND current_price IS NOT NULL AND status = 'active'`,
       [req.user.id],
     );
     const totalInvested = Number(summaryResult[0].total_invested);

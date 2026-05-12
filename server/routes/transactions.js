@@ -295,6 +295,8 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     const balanceChange = ['income', 'transfer_credit'].includes(tx.type) ? -Number(tx.amount) : Number(tx.amount);
     await connection.query('UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?', [balanceChange, tx.account_id, req.user.id]);
     await connection.query('UPDATE transactions SET deleted_at = NOW() WHERE id = ? AND user_id = ?', [txId, req.user.id]);
+    await connection.commit();
+    res.json({ ok: true });
   } catch (err) {
     await connection.rollback();
     next(err);

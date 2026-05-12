@@ -49,7 +49,7 @@ export default function Budgets() {
 
   const openEdit = (budget) => {
     setEditingId(budget.id);
-    setNewCategory(budget.category);
+    setNewCategory(budget.category_id);
     setNewAmount(String(budget.amount));
     setNewPeriod(budget.period);
     setAddOpen(true);
@@ -64,14 +64,14 @@ export default function Budgets() {
     try {
       if (editingId) {
         await api.put(`${apiPaths.budgets}/${editingId}`, {
-          category: newCategory.trim(),
+          category_id: newCategory.trim(),
           amount: Number(newAmount),
           period: newPeriod,
         });
         toast.push('Budget updated', 'success');
       } else {
         await api.post(apiPaths.budgets, {
-          category: newCategory.trim(),
+          category_id: newCategory.trim(),
           amount: Number(newAmount),
           period: newPeriod,
         });
@@ -97,8 +97,8 @@ export default function Budgets() {
     }
   };
 
-  const getSpendingForCategory = (category) => {
-    const found = spending.find((s) => s.category === category);
+  const getSpendingForCategory = (categoryId) => {
+    const found = spending.find((s) => s.category_id === categoryId);
     return found ? Number(found.spent) : 0;
   };
 
@@ -110,14 +110,14 @@ export default function Budgets() {
           <div className="card p-6 text-center text-sm text-text-muted">No budgets set yet.</div>
         ) : null}
         {budgets.map((b) => {
-          const spent = getSpendingForCategory(b.category);
+          const spent = getSpendingForCategory(b.category_id);
           const budgetAmount = Number(b.amount);
           const pct = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
           const overBudget = spent > budgetAmount;
           return (
             <div key={b.id} className="card p-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="font-semibold">{b.category}</div>
+                <div className="font-semibold">{b.category_id || b.name || 'Budget'}</div>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"

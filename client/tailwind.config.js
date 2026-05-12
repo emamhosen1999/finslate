@@ -31,7 +31,7 @@ export default {
         card: 'var(--radius)',
       },
       maxWidth: {
-        app: 'var(--max-width)',
+        content: '1200px',
       },
       boxShadow: {
         card: '0 6px 24px -8px rgba(0,0,0,0.45)',

@@ -3,147 +3,114 @@ const router = express.Router();
 const pool = require('../db/connection');
 const requireAuth = require('../middleware/requireAuth');
 
-// Get all sanchayapatra for a user
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const SCHEME_ENUM = ['three_month_profit','five_year_bangladesh','family_savings','pensioner_savings','wage_earner'];
+
+function calcMaturityValue(faceValue, rate, issueDate, maturityDate, schemeType) {
+  const principal = Number(faceValue); const r = Number(rate) / 100;
+  const msPerDay = 86400000;
+  const days = Math.max(0, (new Date(maturityDate) - new Date(issueDate)) / msPerDay);
+  const months = days / 30.4375; const years = days / 365;
+  if (schemeType === 'three_month_profit') {
+    return principal * Math.pow(1 + r / 4, Math.floor(months / 3));
+  } else if (schemeType === 'five_year_bangladesh') {
+    return principal * Math.pow(1 + r, 5);
+  } else if (schemeType === 'family_savings' || schemeType === 'pensioner_savings') {
+    return principal + principal * r * (months / 12);
+  } else if (schemeType === 'wage_earner') {
+    return principal * Math.pow(1 + r, years);
+  }
+  return null;
+}
+
+// ── GET all ───────────────────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM sanchayapatra WHERE user_id = ? ORDER BY purchase_date DESC',
-      [req.user.id]
-    );
+    const [rows] = await pool.query('SELECT * FROM sanchayapatra WHERE user_id = ? ORDER BY issue_date DESC', [req.user.id]);
     res.json(rows);
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// Get interest payments for a specific sanchayapatra
+// ── GET interest payments ─────────────────────────────────────────────────────
 router.get('/:id/interest-payments', requireAuth, async (req, res, next) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM sanchayapatra_interest_payments WHERE sanchayapatra_id = ? ORDER BY payment_date DESC',
-      [req.params.id]
-    );
+    const [rows] = await pool.query('SELECT * FROM sanchayapatra_interest_payments WHERE sanchayapatra_id = ? ORDER BY due_date DESC', [req.params.id]);
     res.json(rows);
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// Create a new sanchayapatra
+// ── POST create ───────────────────────────────────────────────────────────────
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { name, scheme_type, certificate_number, principal_amount, interest_rate, purchase_date, maturity_date } = req.body;
-
-    // Calculate maturity value based on scheme type
-    let maturity_value = null;
-    const principal = parseFloat(principal_amount);
-    const rate = parseFloat(interest_rate);
-
-    if (scheme_type === '3_month_profit') {
-      // 3-month profit scheme: compound interest every 3 months
-      const months = Math.floor((new Date(maturity_date) - new Date(purchase_date)) / (1000 * 60 * 60 * 24 * 30));
-      const periods = Math.floor(months / 3);
-      maturity_value = principal * Math.pow(1 + (rate / 100) / 4, periods);
-    } else if (scheme_type === '5_year_bangladesh') {
-      // 5-year Bangladesh: compound interest annually
-      const years = 5;
-      maturity_value = principal * Math.pow(1 + (rate / 100), years);
-    } else if (scheme_type === 'family_savings') {
-      // Family savings: simple interest
-      const months = Math.floor((new Date(maturity_date) - new Date(purchase_date)) / (1000 * 60 * 60 * 24 * 30));
-      maturity_value = principal + (principal * (rate / 100) * (months / 12));
-    } else if (scheme_type === 'pensioner') {
-      // Pensioner: simple interest
-      const months = Math.floor((new Date(maturity_date) - new Date(purchase_date)) / (1000 * 60 * 60 * 24 * 30));
-      maturity_value = principal + (principal * (rate / 100) * (months / 12));
-    } else if (scheme_type === 'wage_earner') {
-      // Wage earner: compound interest annually
-      const months = Math.floor((new Date(maturity_date) - new Date(purchase_date)) / (1000 * 60 * 60 * 24 * 30));
-      const years = months / 12;
-      maturity_value = principal * Math.pow(1 + (rate / 100), years);
+    const { scheme_type, certificate_number, face_value, annual_interest_rate, issue_date, maturity_date, interest_payment_frequency = 'on_maturity', interest_payout_account_id, source_account_id, withholding_tax_rate = 10, tin_required = true, note } = req.body;
+    if (!scheme_type || !certificate_number || !face_value || !annual_interest_rate || !issue_date || !maturity_date) {
+      return res.status(400).json({ error: 'scheme_type, certificate_number, face_value, annual_interest_rate, issue_date and maturity_date are required.' });
     }
+    if (!SCHEME_ENUM.includes(scheme_type)) return res.status(400).json({ error: `scheme_type must be one of: ${SCHEME_ENUM.join(', ')}` });
 
     const [result] = await pool.query(
-      `INSERT INTO sanchayapatra (user_id, name, scheme_type, certificate_number, principal_amount, interest_rate, purchase_date, maturity_date, maturity_value, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [req.user.id, name, scheme_type, certificate_number, principal_amount, interest_rate, purchase_date, maturity_date, maturity_value]
+      `INSERT INTO sanchayapatra (user_id, scheme_type, certificate_number, face_value, annual_interest_rate, issue_date, maturity_date, interest_payment_frequency, interest_payout_account_id, source_account_id, withholding_tax_rate, tin_required, status, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+      [req.user.id, scheme_type, certificate_number, Number(face_value), Number(annual_interest_rate), issue_date, maturity_date, interest_payment_frequency, interest_payout_account_id || null, source_account_id || null, Number(withholding_tax_rate), tin_required ? 1 : 0, note || null]
     );
 
-    res.json({ id: result.insertId, maturity_value });
-  } catch (err) {
-    next(err);
-  }
+    const mv = calcMaturityValue(face_value, annual_interest_rate, issue_date, maturity_date, scheme_type);
+    res.json({ id: result.insertId, projected_maturity_value: mv ? Math.round(mv * 100) / 100 : null });
+  } catch (err) { next(err); }
 });
 
-// Update sanchayapatra
+// ── PUT update ────────────────────────────────────────────────────────────────
 router.put('/:id', requireAuth, async (req, res, next) => {
   try {
-    const { name, scheme_type, certificate_number, principal_amount, interest_rate, purchase_date, maturity_date, status } = req.body;
-
-    await pool.query(
-      `UPDATE sanchayapatra SET name = ?, scheme_type = ?, certificate_number = ?, principal_amount = ?, interest_rate = ?, purchase_date = ?, maturity_date = ?, status = ?
-       WHERE id = ? AND user_id = ?`,
-      [name, scheme_type, certificate_number, principal_amount, interest_rate, purchase_date, maturity_date, status, req.params.id, req.user.id]
-    );
-
+    const [existing] = await pool.query('SELECT id FROM sanchayapatra WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (!existing.length) return res.status(404).json({ error: 'Sanchayapatra not found.' });
+    const fields = ['scheme_type','certificate_number','face_value','annual_interest_rate','issue_date','maturity_date','interest_payment_frequency','interest_payout_account_id','source_account_id','withholding_tax_rate','tin_required','encashment_date','encashment_value','encashment_credited_to_id','status','note'];
+    const updates = []; const values = [];
+    for (const f of fields) { if (req.body[f] !== undefined) { updates.push(`${f} = ?`); values.push(req.body[f]); } }
+    if (!updates.length) return res.status(400).json({ error: 'No fields to update.' });
+    values.push(req.params.id, req.user.id);
+    await pool.query(`UPDATE sanchayapatra SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, values);
     res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// Delete sanchayapatra
+// ── DELETE (hard) ─────────────────────────────────────────────────────────────
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    await pool.query('DELETE FROM sanchayapatra WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    const [result] = await pool.query('DELETE FROM sanchayapatra WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Sanchayapatra not found.' });
     res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// Record interest payment
+// ── POST record interest payment ──────────────────────────────────────────────
 router.post('/:id/interest-payment', requireAuth, async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    const { payment_no, due_date, paid_date, gross_amount, credited_to_account_id } = req.body;
+    if (!payment_no || !due_date || !gross_amount) return res.status(400).json({ error: 'payment_no, due_date and gross_amount required.' });
 
-    const { payment_date, amount } = req.body;
+    const [sp] = await conn.query('SELECT * FROM sanchayapatra WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (!sp.length) { await conn.rollback(); return res.status(404).json({ error: 'Sanchayapatra not found' }); }
 
-    // Get sanchayapatra details
-    const [sanchayapatra] = await conn.query(
-      'SELECT * FROM sanchayapatra WHERE id = ? AND user_id = ?',
-      [req.params.id, req.user.id]
-    );
-
-    if (!sanchayapatra.length) {
-      await conn.rollback();
-      return res.status(404).json({ error: 'Sanchayapatra not found' });
-    }
-
-    // Calculate cumulative interest and value
-    const [lastPayment] = await conn.query(
-      'SELECT cumulative_interest, cumulative_value FROM sanchayapatra_interest_payments WHERE sanchayapatra_id = ? ORDER BY payment_date DESC LIMIT 1',
-      [req.params.id]
-    );
-
-    const cumulativeInterest = lastPayment.length ? parseFloat(lastPayment[0].cumulative_interest) + parseFloat(amount) : parseFloat(amount);
-    const cumulativeValue = lastPayment.length ? parseFloat(lastPayment[0].cumulative_value) + parseFloat(amount) : parseFloat(sanchayapatra[0].principal_amount) + parseFloat(amount);
+    const tdsRate = Number(sp[0].withholding_tax_rate) / 100;
+    const tdsAmount = Math.round(Number(gross_amount) * tdsRate * 100) / 100;
+    const netAmount = Math.round((Number(gross_amount) - tdsAmount) * 100) / 100;
 
     await conn.query(
-      `INSERT INTO sanchayapatra_interest_payments (sanchayapatra_id, payment_date, amount, cumulative_interest, cumulative_value)
-       VALUES (?, ?, ?, ?, ?)`,
-      [req.params.id, payment_date, amount, cumulativeInterest, cumulativeValue]
+      `INSERT INTO sanchayapatra_interest_payments (sanchayapatra_id, payment_no, due_date, paid_date, gross_amount, tds_amount, net_amount, credited_to_account_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.id, payment_no, due_date, paid_date || null, Number(gross_amount), tdsAmount, netAmount, credited_to_account_id || null, paid_date ? 'paid' : 'upcoming']
     );
 
+    if (paid_date && credited_to_account_id) {
+      await conn.query('UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?', [netAmount, Number(credited_to_account_id), req.user.id]);
+      await conn.query(`INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes) VALUES (?, ?, 'income', ?, 'BDT', ?, 'Interest', 'account', 'Bangladesh Bank', ?)`, [req.user.id, Number(credited_to_account_id), netAmount, paid_date, `Sanchayapatra interest #${payment_no}`]);
+    }
     await conn.commit();
-    res.json({ cumulativeInterest, cumulativeValue });
-  } catch (err) {
-    await conn.rollback();
-    next(err);
-  } finally {
-    conn.release();
-  }
+    res.json({ ok: true, gross_amount: Number(gross_amount), tds_amount: tdsAmount, net_amount: netAmount });
+  } catch (err) { await conn.rollback(); next(err); } finally { conn.release(); }
 });
 
 module.exports = router;

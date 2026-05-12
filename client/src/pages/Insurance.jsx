@@ -298,7 +298,7 @@ export default function Insurance() {
           <option value="">No account</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>
@@ -326,7 +326,7 @@ export default function Insurance() {
           <option value="">Select account</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

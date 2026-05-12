@@ -74,7 +74,7 @@ router.post('/login/email', async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, name, email, avatar_url, password_hash FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, name, email, profile_photo_url, password_hash FROM users WHERE email = ? LIMIT 1',
       [email.toLowerCase()],
     );
     if (!rows.length) {
@@ -96,7 +96,7 @@ router.post('/login/email', async (req, res, next) => {
 
     req.logIn({ id: user.id }, (err) => {
       if (err) return next(err);
-      return res.json({ user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatar_url } });
+      return res.json({ user: { id: user.id, name: user.name, email: user.email, profile_photo_url: user.profile_photo_url } });
     });
   } catch (err) {
     next(err);
@@ -106,7 +106,7 @@ router.post('/login/email', async (req, res, next) => {
 router.get('/me', (req, res) => {
   if (req.isAuthenticated && req.isAuthenticated() && req.user) {
     const { id, name, email, phone, default_currency, profile_photo_url, timezone, date_format, financial_year_start, tin_number, nid_number, is_active, last_login_at, updated_at } = req.user;
-    return res.json({ user: { id, name, email, phone, default_currency, avatarUrl: profile_photo_url, timezone, date_format, financial_year_start, tin_number, nid_number, is_active, last_login_at, updated_at } });
+    return res.json({ user: { id, name, email, phone, default_currency, profile_photo_url, timezone, date_format, financial_year_start, tin_number, nid_number, is_active, last_login_at, updated_at } });
   }
   return res.json({ user: null });
 });
@@ -349,83 +349,79 @@ router.post('/delete-account/confirm', async (req, res, next) => {
 
     const userId = user.id;
 
-    // Delete user data in order respecting foreign keys
-    // Delete audit logs
+    // Delete user data in order respecting foreign keys (child tables first)
+    // ── Audit & reports ──
     await connection.query('DELETE FROM audit_logs WHERE user_id = ?', [userId]);
-    
-    // Delete bill payments
+    await connection.query('DELETE FROM reports WHERE user_id = ?', [userId]);
+
+    // ── Bill payments (child of bills) ──
     await connection.query('DELETE bp FROM bill_payments bp JOIN bills b ON bp.bill_id = b.id WHERE b.user_id = ?', [userId]);
-    
-    // Delete credit card payments
+
+    // ── Credit card children ──
     await connection.query('DELETE ccp FROM credit_card_payments ccp JOIN credit_cards cc ON ccp.credit_card_id = cc.id WHERE cc.user_id = ?', [userId]);
-    
-    // Delete credit card statements
     await connection.query('DELETE ccs FROM credit_card_statements ccs JOIN credit_cards cc ON ccs.credit_card_id = cc.id WHERE cc.user_id = ?', [userId]);
-    
-    // Delete DPS payments
+
+    // ── DPS payments (child of dps) ──
     await connection.query('DELETE dp FROM dps_payments dp JOIN dps d ON dp.dps_id = d.id WHERE d.user_id = ?', [userId]);
-    
-    // Delete PF contributions
+
+    // ── FDR renewals (child of fixed_deposits) ──
+    await connection.query('DELETE fr FROM fdr_renewals fr JOIN fixed_deposits fd ON fr.fdr_id = fd.id WHERE fd.user_id = ?', [userId]);
+
+    // ── Loan payments (child of loans) ──
+    await connection.query('DELETE lp FROM loan_payments lp JOIN loans l ON lp.loan_id = l.id WHERE l.user_id = ?', [userId]);
+
+    // ── PF contributions (child of provident_fund) ──
     await connection.query('DELETE pfc FROM pf_contributions pfc JOIN provident_fund pf ON pfc.provident_fund_id = pf.id WHERE pf.user_id = ?', [userId]);
 
-    // Delete recurring transactions
+    // ── Insurance premium payments (child of insurances) ──
+    await connection.query('DELETE ipp FROM insurance_premium_payments ipp JOIN insurances ins ON ipp.insurance_id = ins.id WHERE ins.user_id = ?', [userId]);
+
+    // ── Sanchayapatra interest payments ──
+    await connection.query('DELETE sip FROM sanchayapatra_interest_payments sip JOIN sanchayapatra s ON sip.sanchayapatra_id = s.id WHERE s.user_id = ?', [userId]);
+
+    // ── Lending repayments (child of personal_lendings) ──
+    await connection.query('DELETE lr FROM lending_repayments lr JOIN personal_lendings pl ON lr.personal_lending_id = pl.id WHERE pl.user_id = ?', [userId]);
+
+    // ── Goal contributions (child of goals) ──
+    await connection.query('DELETE gc FROM goal_contributions gc JOIN goals g ON gc.goal_id = g.id WHERE g.user_id = ?', [userId]);
+
+    // ── Investment children ──
+    await connection.query('DELETE it FROM investment_transactions it JOIN investments inv ON it.investment_id = inv.id WHERE inv.user_id = ?', [userId]);
+    await connection.query('DELETE isn FROM investment_snapshots isn JOIN investments inv ON isn.investment_id = inv.id WHERE inv.user_id = ?', [userId]);
+
+    // ── Recurring rules & recurring transactions ──
+    await connection.query('DELETE FROM recurring_rules WHERE user_id = ?', [userId]);
     await connection.query('DELETE FROM recurring_transactions WHERE user_id = ?', [userId]);
 
-    // Delete transactions
+    // ── Tags & Attachments (children of transactions) ──
+    await connection.query('DELETE tt FROM transaction_tags tt JOIN transactions t ON t.id = tt.transaction_id WHERE t.user_id = ?', [userId]);
+    await connection.query('DELETE ta FROM transaction_attachments ta JOIN transactions t ON t.id = ta.transaction_id WHERE t.user_id = ?', [userId]);
+    await connection.query('DELETE FROM attachments WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM tags WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM categories WHERE user_id = ?', [userId]);
+
+    // ── Transactions ──
     await connection.query('DELETE FROM transactions WHERE user_id = ?', [userId]);
 
-    // Delete bills
+    // ── Parent tables ──
     await connection.query('DELETE FROM bills WHERE user_id = ?', [userId]);
-
-    // Delete subscriptions
     await connection.query('DELETE FROM subscriptions WHERE user_id = ?', [userId]);
-
-    // Delete credit cards
     await connection.query('DELETE FROM credit_cards WHERE user_id = ?', [userId]);
-
-    // Delete loans
     await connection.query('DELETE FROM loans WHERE user_id = ?', [userId]);
-
-    // Delete DPS
     await connection.query('DELETE FROM dps WHERE user_id = ?', [userId]);
-
-    // Delete fixed deposits
     await connection.query('DELETE FROM fixed_deposits WHERE user_id = ?', [userId]);
-
-    // Delete investments
     await connection.query('DELETE FROM investments WHERE user_id = ?', [userId]);
-
-    // Delete insurance
+    await connection.query('DELETE FROM insurances WHERE user_id = ?', [userId]);
     await connection.query('DELETE FROM insurance_premiums WHERE user_id = ?', [userId]);
-
-    // Delete sanchayapatra
     await connection.query('DELETE FROM sanchayapatra WHERE user_id = ?', [userId]);
-
-    // Delete personal lending
     await connection.query('DELETE FROM personal_lendings WHERE user_id = ?', [userId]);
-
-    // Delete provident fund
     await connection.query('DELETE FROM provident_fund WHERE user_id = ?', [userId]);
-
-    // Delete tax records
     await connection.query('DELETE FROM tax_records WHERE user_id = ?', [userId]);
-
-    // Delete goals
     await connection.query('DELETE FROM goals WHERE user_id = ?', [userId]);
-
-    // Delete budgets
     await connection.query('DELETE FROM budgets WHERE user_id = ?', [userId]);
-
-    // Delete net worth snapshots
     await connection.query('DELETE FROM net_worth_snapshots WHERE user_id = ?', [userId]);
-
-    // Delete notifications
     await connection.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
-
-    // Delete income sources
     await connection.query('DELETE FROM income_sources WHERE user_id = ?', [userId]);
-
-    // Delete accounts
     await connection.query('DELETE FROM accounts WHERE user_id = ?', [userId]);
 
     // Finally delete the user

@@ -9,7 +9,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const { credit_card_id, statement_id, limit = 50, offset = 0 } = req.query;
     
     let query = `
-      SELECT ccp.*, cc.name as card_name, a.name as account_name
+      SELECT ccp.*, cc.card_name, a.name as account_name
       FROM credit_card_payments ccp
       JOIN credit_cards cc ON ccp.credit_card_id = cc.id
       LEFT JOIN accounts a ON ccp.paid_from_account_id = a.id
@@ -41,7 +41,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT ccp.*, cc.name as card_name, a.name as account_name
+      `SELECT ccp.*, cc.card_name, a.name as account_name
        FROM credit_card_payments ccp
        JOIN credit_cards cc ON ccp.credit_card_id = cc.id
        LEFT JOIN accounts a ON ccp.paid_from_account_id = a.id
@@ -77,7 +77,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     } = req.body;
     
     // Verify credit card belongs to user
-    const [cards] = await connection.query('SELECT id, due_amount FROM credit_cards WHERE id = ? AND user_id = ?', [credit_card_id, req.user.id]);
+    const [cards] = await connection.query('SELECT id, current_outstanding, card_name FROM credit_cards WHERE id = ? AND user_id = ?', [credit_card_id, req.user.id]);
     if (cards.length === 0) {
       await connection.rollback();
       return res.status(404).json({ error: 'Credit card not found' });
@@ -100,24 +100,24 @@ router.post('/', requireAuth, async (req, res, next) => {
       [credit_card_id, statement_id, paid_from_account_id, amount, payment_type, payment_date, reference_no, note]
     );
     
-    // Update credit card due amount
+    // Update credit card outstanding
     await connection.query(
-      'UPDATE credit_cards SET due_amount = GREATEST(0, due_amount - ?) WHERE id = ?',
+      'UPDATE credit_cards SET current_outstanding = GREATEST(0, current_outstanding - ?) WHERE id = ?',
       [amount, credit_card_id]
     );
     
     // Create transaction if account provided
     if (paid_from_account_id) {
       await connection.query(
-        `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id)
-         VALUES (?, ?, 'debit', ?, 'Credit Card Payment', ?, 'credit_card_payment', ?)`,
-        [req.user.id, paid_from_account_id, amount, `Credit card payment - ${reference_no || 'Manual'}`, result.insertId]
+        `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+         VALUES (?, ?, 'expense', ?, 'BDT', ?, 'Credit Card Payment', 'account', ?, ?, ?)`,
+        [req.user.id, paid_from_account_id, amount, payment_date || new Date().toISOString().slice(0,10), result.insertId, cards[0].card_name, `CC payment - ${reference_no || 'Manual'}`]
       );
       
       // Update account balance
       await connection.query(
-        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-        [amount, paid_from_account_id]
+        'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+        [amount, paid_from_account_id, req.user.id]
       );
     }
     

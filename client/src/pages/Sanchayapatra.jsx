@@ -24,13 +24,15 @@ export default function Sanchayapatra() {
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [formData, setFormData] = useState({
-    name: '',
+    institution_name: '',
     scheme_type: '3_month_profit',
     certificate_number: '',
     principal_amount: '',
-    interest_rate: '',
+    annual_interest_rate: '',
     purchase_date: '',
     maturity_date: '',
+    withholding_tax_rate: '10',
+    note: '',
   });
 
   const loadSanchayapatra = async () => {
@@ -52,13 +54,15 @@ export default function Sanchayapatra() {
   const openAdd = () => {
     setEditingId(null);
     setFormData({
-      name: '',
+      institution_name: '',
       scheme_type: '3_month_profit',
       certificate_number: '',
       principal_amount: '',
-      interest_rate: '',
+      annual_interest_rate: '11.5',
       purchase_date: new Date().toISOString().split('T')[0],
       maturity_date: '',
+      withholding_tax_rate: '10',
+      note: '',
     });
     setAddOpen(true);
   };
@@ -66,20 +70,22 @@ export default function Sanchayapatra() {
   const openEdit = (s) => {
     setEditingId(s.id);
     setFormData({
-      name: s.name,
+      institution_name: s.institution_name || '',
       scheme_type: s.scheme_type,
       certificate_number: s.certificate_number,
       principal_amount: s.principal_amount,
-      interest_rate: s.interest_rate,
+      annual_interest_rate: s.annual_interest_rate,
       purchase_date: s.purchase_date,
       maturity_date: s.maturity_date,
+      withholding_tax_rate: String(s.withholding_tax_rate || '10'),
+      note: s.note || '',
     });
     setAddOpen(true);
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.scheme_type || !formData.certificate_number || !formData.principal_amount || !formData.interest_rate || !formData.purchase_date || !formData.maturity_date) {
-      toast.push('All fields are required', 'error');
+    if (!formData.institution_name || !formData.scheme_type || !formData.certificate_number || !formData.principal_amount || !formData.annual_interest_rate || !formData.purchase_date || !formData.maturity_date) {
+      toast.push('Institution name, scheme type, certificate number, principal amount, annual interest rate, purchase date, and maturity date are required', 'error');
       return;
     }
     setAddLoading(true);
@@ -144,24 +150,41 @@ export default function Sanchayapatra() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="font-semibold truncate">{s.name}</div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(s)}
-                      className="p-1.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
-                      style={{ color: 'var(--accent)' }}
+                  <div className="font-semibold truncate">{s.institution_name}</div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-[10px] uppercase rounded-full px-2 py-[2px]"
+                      style={{
+                        background: s.status === 'active' ? 'var(--positive-soft)' : 
+                                  s.status === 'matured' ? 'var(--accent-soft)' :
+                                  s.status === 'encashed' ? 'var(--warning-soft)' :
+                                  'var(--bg-elevated)',
+                        color: s.status === 'active' ? 'var(--positive)' : 
+                               s.status === 'matured' ? 'var(--accent)' :
+                               s.status === 'encashed' ? 'var(--warning)' :
+                               'var(--text-muted)',
+                      }}
                     >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirm(s.id)}
-                      className="p-1.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
-                      style={{ color: 'var(--negative)' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      {s.status}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(s)}
+                        className="p-1.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(s.id)}
+                        className="p-1.5 rounded hover:bg-[var(--bg-elevated)] transition-colors"
+                        style={{ color: 'var(--negative)' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="text-[11px] text-text-muted mb-2">
@@ -174,7 +197,7 @@ export default function Sanchayapatra() {
                   </div>
                   <div>
                     <div className="text-text-muted">Rate</div>
-                    <div className="font-mono">{s.interest_rate}%</div>
+                    <div className="font-mono">{s.annual_interest_rate}%</div>
                   </div>
                   <div>
                     <div className="text-text-muted">Purchase</div>
@@ -185,25 +208,22 @@ export default function Sanchayapatra() {
                     <div>{fmtDate(s.maturity_date)}</div>
                   </div>
                 </div>
-                {s.maturity_value && (
+                {s.projected_maturity_value && (
                   <div className="mt-2 pt-2 border-t flex items-center justify-between">
-                    <span className="text-xs text-text-muted">Maturity Value</span>
+                    <span className="text-xs text-text-muted">Projected Maturity</span>
                     <span className="font-mono text-sm font-semibold flex items-center gap-1">
-                      <TrendingUp size={14} /> {formatBDT(s.maturity_value)}
+                      <TrendingUp size={14} /> {formatBDT(s.projected_maturity_value)}
                     </span>
                   </div>
                 )}
-                <div className="mt-2">
-                  <span
-                    className="text-[10px] uppercase rounded-full px-2 py-[2px]"
-                    style={{
-                      background: s.status === 'active' ? 'var(--positive-soft)' : 'var(--bg-elevated)',
-                      color: s.status === 'active' ? 'var(--positive)' : 'var(--text-muted)',
-                    }}
-                  >
-                    {s.status}
-                  </span>
-                </div>
+                {s.actual_maturity_value && (
+                  <div className="mt-2 pt-2 border-t flex items-center justify-between">
+                    <span className="text-xs text-text-muted">Actual Maturity</span>
+                    <span className="font-mono text-sm font-semibold" style={{ color: 'var(--positive)' }}>
+                      {formatBDT(s.actual_maturity_value)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -217,13 +237,13 @@ export default function Sanchayapatra() {
       </main>
 
       <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title={editingId ? 'Edit Sanchayapatra' : 'Add Sanchayapatra'}>
-        <label className="block text-xs text-text-muted mb-1">Name</label>
+        <label className="block text-xs text-text-muted mb-1">Institution name</label>
         <input
           className="input mb-3"
           type="text"
-          placeholder="e.g. 5-Year Bangladesh Sanchayapatra"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="e.g. Bangladesh Bank"
+          value={formData.institution_name}
+          onChange={(e) => setFormData({ ...formData, institution_name: e.target.value })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Scheme Type</label>
@@ -254,14 +274,14 @@ export default function Sanchayapatra() {
           onChange={(e) => setFormData({ ...formData, principal_amount: e.target.value.replace(/[^\d]/g, '') })}
         />
 
-        <label className="block text-xs text-text-muted mb-1">Interest Rate (%)</label>
+        <label className="block text-xs text-text-muted mb-1">Annual Interest Rate (%)</label>
         <input
           className="input mb-3"
           type="text"
           inputMode="numeric"
           placeholder="e.g. 11.5"
-          value={formData.interest_rate}
-          onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value.replace(/[^\d.]/g, '') })}
+          value={formData.annual_interest_rate}
+          onChange={(e) => setFormData({ ...formData, annual_interest_rate: e.target.value.replace(/[^\d.]/g, '') })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Purchase Date</label>
@@ -274,10 +294,29 @@ export default function Sanchayapatra() {
 
         <label className="block text-xs text-text-muted mb-1">Maturity Date</label>
         <input
-          className="input mb-4"
+          className="input mb-3"
           type="date"
           value={formData.maturity_date}
           onChange={(e) => setFormData({ ...formData, maturity_date: e.target.value })}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Withholding Tax Rate (%)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 10"
+          value={formData.withholding_tax_rate}
+          onChange={(e) => setFormData({ ...formData, withholding_tax_rate: e.target.value.replace(/[^\d.]/g, '') })}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Note (optional)</label>
+        <textarea
+          className="input mb-4"
+          rows="2"
+          placeholder="Any additional notes..."
+          value={formData.note}
+          onChange={(e) => setFormData({ ...formData, note: e.target.value })}
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleSubmit}>

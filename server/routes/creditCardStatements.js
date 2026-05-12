@@ -9,7 +9,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const { credit_card_id, status, limit = 50, offset = 0 } = req.query;
     
     let query = `
-      SELECT ccs.*, cc.name as card_name, cc.limit_amt as credit_limit
+      SELECT ccs.*, cc.card_name, cc.credit_limit
       FROM credit_card_statements ccs
       JOIN credit_cards cc ON ccs.credit_card_id = cc.id
       WHERE cc.user_id = ?
@@ -40,7 +40,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT ccs.*, cc.name as card_name, cc.limit_amt as credit_limit
+      `SELECT ccs.*, cc.card_name, cc.credit_limit
        FROM credit_card_statements ccs
        JOIN credit_cards cc ON ccs.credit_card_id = cc.id
        WHERE ccs.id = ? AND cc.user_id = ?`,

@@ -2,6 +2,14 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 
 const mysql = require('mysql2/promise');
 
+// ─── Errors safe to ignore in alterations ──────────────────────────────────
+// 1060 ER_DUP_FIELDNAME        column already exists
+// 1826 ER_FK_DUP_NAME          constraint already exists
+// 1054 ER_BAD_FIELD_ERROR      unknown column (rename source col gone)
+// 1091 ER_CANT_DROP_FIELD_OR_KEY  can't drop; doesn't exist
+// 1005 ER_CANT_CREATE_TABLE    FK target issue on safe-ignore alters
+const SAFE_ERRNO = new Set([1060, 1826, 1054, 1091, 1005]);
+
 const statements = [
   `CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -47,25 +55,54 @@ const statements = [
   )`,
 
   `CREATE TABLE IF NOT EXISTS credit_cards (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    user_id     INT NOT NULL,
-    name        VARCHAR(100) NOT NULL,
-    limit_amt   DECIMAL(12,2) NOT NULL,
-    due_amount  DECIMAL(12,2) DEFAULT 0.00,
-    due_date    DATE,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                 INT NOT NULL,
+    issuer                  VARCHAR(100) NOT NULL DEFAULT 'Unknown',
+    card_name               VARCHAR(100) NOT NULL,
+    card_number_last4       CHAR(4) NULL,
+    card_type               ENUM('visa','mastercard','amex','unionpay','discover','other') NULL,
+    credit_limit            DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    current_outstanding     DECIMAL(15,2) DEFAULT 0.00,
+    billing_cycle_day       TINYINT NULL,
+    payment_due_day         TINYINT NULL,
+    annual_interest_rate    DECIMAL(5,2) NULL,
+    minimum_payment_pct     DECIMAL(5,2) DEFAULT 5.00,
+    minimum_payment_fixed   DECIMAL(10,2) DEFAULT 500.00,
+    cash_advance_limit      DECIMAL(15,2) NULL,
+    cash_advance_rate       DECIMAL(5,2) NULL,
+    reward_points           INT DEFAULT 0,
+    is_active               BOOLEAN DEFAULT TRUE,
+    linked_bank_account_id  INT NULL,
+    color                   VARCHAR(7) NULL,
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_cards_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
 
   `CREATE TABLE IF NOT EXISTS loans (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    user_id       INT NOT NULL,
-    name          VARCHAR(100) NOT NULL,
-    principal     DECIMAL(12,2) NOT NULL,
-    remaining     DECIMAL(12,2) NOT NULL,
-    monthly_emi   DECIMAL(12,2) NOT NULL,
-    interest_rate DECIMAL(5,2),
-    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                 INT NOT NULL,
+    lender_name             VARCHAR(100) NOT NULL,
+    loan_type               ENUM('personal','home','auto','student','business','informal') NOT NULL DEFAULT 'personal',
+    purpose                 VARCHAR(255) NULL,
+    principal_amount        DECIMAL(15,2) NOT NULL,
+    outstanding_balance     DECIMAL(15,2) NOT NULL,
+    annual_interest_rate    DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    interest_type           ENUM('flat','reducing_balance') NOT NULL DEFAULT 'reducing_balance',
+    tenure_months           SMALLINT NOT NULL DEFAULT 12,
+    emi_amount              DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    disbursement_date       DATE NOT NULL DEFAULT (CURRENT_DATE),
+    first_emi_date          DATE NOT NULL DEFAULT (CURRENT_DATE),
+    emi_day_of_month        TINYINT NULL,
+    repayment_account_id    INT NULL,
+    loan_account_number     VARCHAR(50) NULL,
+    guarantor_name          VARCHAR(100) NULL,
+    collateral_description  TEXT NULL,
+    late_fee_rate           DECIMAL(5,2) DEFAULT 0.00,
+    prepayment_penalty_pct  DECIMAL(5,2) DEFAULT 0.00,
+    status                  ENUM('active','closed','defaulted','restructured') DEFAULT 'active',
+    closed_date             DATE NULL,
+    document_attachment_id  INT NULL,
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_loans_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
 
@@ -155,13 +192,29 @@ const statements = [
   )`,
 
   `CREATE TABLE IF NOT EXISTS budgets (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    user_id     INT NOT NULL,
-    category    VARCHAR(100) NOT NULL,
-    amount      DECIMAL(15,2) NOT NULL,
-    period      VARCHAR(20) DEFAULT 'monthly',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_budgets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id             INT NOT NULL,
+    name                VARCHAR(100) NULL,
+    category_id         VARCHAR(80) NULL,
+    period              ENUM('monthly','weekly','yearly','custom') NOT NULL DEFAULT 'monthly',
+    amount              DECIMAL(15,2) NOT NULL,
+    start_date          DATE NOT NULL DEFAULT (CURRENT_DATE),
+    end_date            DATE NULL,
+    alert_threshold_pct TINYINT DEFAULT 80,
+    rollover_unspent    BOOLEAN DEFAULT FALSE,
+    is_active           BOOLEAN DEFAULT TRUE,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_budgets_user     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS budget_alerts (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    budget_id       INT NOT NULL,
+    triggered_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    utilization_pct DECIMAL(5,2) NOT NULL,
+    alert_type      ENUM('threshold','exceeded','period_end') NOT NULL,
+    is_read         BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_ba_budget FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
   )`,
 
   `CREATE TABLE IF NOT EXISTS recurring_transactions (
@@ -236,18 +289,121 @@ const statements = [
     CONSTRAINT fk_income_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
+  `CREATE TABLE IF NOT EXISTS incomes (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                 INT NOT NULL,
+    source_type             ENUM('salary','freelance','rental','dividend','business','gift','remittance','other') NOT NULL,
+    title                   VARCHAR(100) NOT NULL,
+    gross_amount            DECIMAL(15,2) NOT NULL,
+    tds_amount              DECIMAL(15,2) DEFAULT 0.00,
+    other_deductions        DECIMAL(15,2) DEFAULT 0.00,
+    currency                CHAR(3) DEFAULT 'BDT',
+    income_date             DATE NOT NULL,
+    credited_to_account_id  INT NULL,
+    category_id             INT NULL,
+    description             TEXT NULL,
+    is_recurring            BOOLEAN DEFAULT FALSE,
+    recurring_rule_id       INT NULL,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_incomes_user    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_incomes_account FOREIGN KEY (credited_to_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS income_salary_details (
+    id                        INT AUTO_INCREMENT PRIMARY KEY,
+    income_id                 INT NOT NULL UNIQUE,
+    employer_name             VARCHAR(100) NULL,
+    basic_salary              DECIMAL(15,2) NULL,
+    house_rent_allowance      DECIMAL(15,2) NULL,
+    medical_allowance         DECIMAL(15,2) NULL,
+    transport_allowance       DECIMAL(15,2) NULL,
+    bonus                     DECIMAL(15,2) NULL,
+    provident_fund_deduction  DECIMAL(15,2) NULL,
+    pay_period                ENUM('monthly','weekly','bi_weekly') DEFAULT 'monthly',
+    employer_tin              VARCHAR(20) NULL,
+    CONSTRAINT fk_isd_income FOREIGN KEY (income_id) REFERENCES incomes(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS income_freelance_details (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    income_id               INT NOT NULL UNIQUE,
+    client_name             VARCHAR(100) NULL,
+    project_name            VARCHAR(100) NULL,
+    invoice_number          VARCHAR(50) NULL,
+    platform                VARCHAR(50) NULL,
+    platform_fee            DECIMAL(15,2) DEFAULT 0.00,
+    CONSTRAINT fk_ifd_income FOREIGN KEY (income_id) REFERENCES incomes(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS income_rental_details (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    income_id           INT NOT NULL UNIQUE,
+    property_name       VARCHAR(100) NULL,
+    tenant_name         VARCHAR(100) NULL,
+    tenant_phone        VARCHAR(20) NULL,
+    advance_deposit     DECIMAL(15,2) NULL,
+    lease_start         DATE NULL,
+    lease_end           DATE NULL,
+    CONSTRAINT fk_ird_income FOREIGN KEY (income_id) REFERENCES incomes(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS income_dividend_details (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    income_id           INT NOT NULL UNIQUE,
+    investment_id       INT NULL,
+    dividend_type       ENUM('cash','stock') NULL,
+    units               DECIMAL(15,4) NULL,
+    rate_per_unit       DECIMAL(10,4) NULL,
+    CONSTRAINT fk_idd_income FOREIGN KEY (income_id) REFERENCES incomes(id) ON DELETE CASCADE
+  )`,
+
   `CREATE TABLE IF NOT EXISTS investments (
+    id                        INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                   INT NOT NULL,
+    type                      ENUM('stock','bond','mutual_fund','crypto','etf','commodity') NOT NULL DEFAULT 'stock',
+    name                      VARCHAR(100) NOT NULL,
+    symbol                    VARCHAR(20) NULL,
+    exchange                  VARCHAR(20) NULL,
+    currency                  CHAR(3) DEFAULT 'BDT',
+    quantity_held             DECIMAL(15,4) DEFAULT 0.0000,
+    average_buy_price         DECIMAL(15,4) DEFAULT 0.0000,
+    current_price             DECIMAL(15,4) NULL,
+    total_invested            DECIMAL(15,2) DEFAULT 0.00,
+    realized_gain_loss        DECIMAL(15,2) DEFAULT 0.00,
+    total_dividends_received  DECIMAL(15,2) DEFAULT 0.00,
+    broker_name               VARCHAR(100) NULL,
+    bo_account_number         VARCHAR(50) NULL,
+    status                    ENUM('active','sold','delisted') DEFAULT 'active',
+    created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS investment_transactions (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    investment_id     INT NOT NULL,
+    type              ENUM('buy','sell','dividend','split','bonus') NOT NULL,
+    date              DATE NOT NULL,
+    quantity          DECIMAL(15,4) NOT NULL,
+    price_per_unit    DECIMAL(15,4) NOT NULL,
+    brokerage_fee     DECIMAL(10,2) DEFAULT 0.00,
+    tax               DECIMAL(10,2) DEFAULT 0.00,
+    source_account_id INT NULL,
+    note              TEXT NULL,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_inv_tx_investment FOREIGN KEY (investment_id) REFERENCES investments(id) ON DELETE CASCADE,
+    CONSTRAINT fk_inv_tx_account    FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS investment_snapshots (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     user_id         INT NOT NULL,
-    name            VARCHAR(100) NOT NULL,
-    type            VARCHAR(50) NOT NULL,
-    symbol          VARCHAR(20),
+    investment_id   INT NOT NULL,
+    snapshot_date   DATE NOT NULL,
+    price           DECIMAL(15,4) NOT NULL,
     quantity        DECIMAL(15,4) NOT NULL,
-    buy_price       DECIMAL(12,2) NOT NULL,
-    current_price   DECIMAL(12,2),
-    buy_date        DATE,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_investments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    value           DECIMAL(15,2) NOT NULL,
+    CONSTRAINT fk_inv_snap_user       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_inv_snap_investment FOREIGN KEY (investment_id) REFERENCES investments(id) ON DELETE CASCADE
   )`,
 
   `CREATE TABLE IF NOT EXISTS insurance_premiums (
@@ -263,6 +419,47 @@ const statements = [
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_insurance_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_insurance_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS insurances (
+    id                    INT AUTO_INCREMENT PRIMARY KEY,
+    user_id               INT NOT NULL,
+    type                  ENUM('life','term','health','vehicle','home','fire','travel') NOT NULL,
+    provider_name         VARCHAR(100) NOT NULL,
+    policy_number         VARCHAR(100) NOT NULL,
+    plan_name             VARCHAR(100) NULL,
+    sum_assured           DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    premium_amount        DECIMAL(15,2) NOT NULL,
+    premium_frequency     ENUM('monthly','quarterly','half_yearly','yearly') NOT NULL DEFAULT 'yearly',
+    premium_due_day       TINYINT NULL,
+    policy_start_date     DATE NOT NULL DEFAULT (CURRENT_DATE),
+    policy_end_date       DATE NULL,
+    maturity_value        DECIMAL(15,2) NULL,
+    surrender_value       DECIMAL(15,2) NULL,
+    nominee_name          VARCHAR(100) NULL,
+    nominee_relation      VARCHAR(50) NULL,
+    agent_name            VARCHAR(100) NULL,
+    linked_account_id     INT NULL,
+    policy_document_id    INT NULL,
+    status                ENUM('active','lapsed','surrendered','matured','claimed') DEFAULT 'active',
+    created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_insurances_user    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_insurances_account FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS insurance_premium_payments (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    insurance_id            INT NOT NULL,
+    due_date                DATE NOT NULL,
+    paid_date               DATE NULL,
+    amount                  DECIMAL(15,2) NOT NULL,
+    late_fee                DECIMAL(15,2) DEFAULT 0.00,
+    source_account_id       INT NULL,
+    receipt_attachment_id   INT NULL,
+    status                  ENUM('upcoming','paid','missed') DEFAULT 'upcoming',
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ipp_insurance FOREIGN KEY (insurance_id) REFERENCES insurances(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ipp_account   FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS tags (
@@ -321,57 +518,80 @@ const statements = [
   )`,
 
   `CREATE TABLE IF NOT EXISTS sanchayapatra (
-    id                  INT AUTO_INCREMENT PRIMARY KEY,
-    user_id             INT NOT NULL,
-    name                VARCHAR(100) NOT NULL,
-    scheme_type         ENUM('3_month_profit','5_year_bangladesh','family_savings','pensioner','wage_earner') NOT NULL,
-    certificate_number VARCHAR(100) NOT NULL,
-    principal_amount    DECIMAL(15,2) NOT NULL,
-    interest_rate       DECIMAL(5,2) NOT NULL,
-    purchase_date       DATE NOT NULL,
-    maturity_date       DATE NOT NULL,
-    maturity_value      DECIMAL(15,2) NULL,
-    status              ENUM('active','matured','encashed') DEFAULT 'active',
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_sanchayapatra_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id                          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                     INT NOT NULL,
+    scheme_type                 ENUM('three_month_profit','five_year_bangladesh','family_savings','pensioner_savings','wage_earner') NOT NULL DEFAULT 'five_year_bangladesh',
+    certificate_number          VARCHAR(50) NOT NULL,
+    issue_date                  DATE NOT NULL DEFAULT (CURRENT_DATE),
+    face_value                  DECIMAL(15,2) NOT NULL,
+    annual_interest_rate        DECIMAL(5,2) NOT NULL,
+    interest_payment_frequency  ENUM('monthly','quarterly','on_maturity') NOT NULL DEFAULT 'on_maturity',
+    maturity_date               DATE NOT NULL DEFAULT (CURRENT_DATE),
+    interest_payout_account_id  INT NULL,
+    source_account_id           INT NULL,
+    withholding_tax_rate        DECIMAL(5,2) DEFAULT 10.00,
+    tin_required                BOOLEAN DEFAULT TRUE,
+    encashment_date             DATE NULL,
+    encashment_value            DECIMAL(15,2) NULL,
+    encashment_credited_to_id   INT NULL,
+    status                      ENUM('active','matured','encashed') DEFAULT 'active',
+    note                        TEXT NULL,
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sanchayapatra_user            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sanchayapatra_payout_account  FOREIGN KEY (interest_payout_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    CONSTRAINT fk_sanchayapatra_source_account  FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    CONSTRAINT fk_sanchayapatra_encash_account  FOREIGN KEY (encashment_credited_to_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS sanchayapatra_interest_payments (
-    id                  INT AUTO_INCREMENT PRIMARY KEY,
-    sanchayapatra_id    INT NOT NULL,
-    payment_date        DATE NOT NULL,
-    amount              DECIMAL(15,2) NOT NULL,
-    cumulative_interest DECIMAL(15,2) NOT NULL,
-    cumulative_value    DECIMAL(15,2) NOT NULL,
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_sip_sanchayapatra FOREIGN KEY (sanchayapatra_id) REFERENCES sanchayapatra(id) ON DELETE CASCADE
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    sanchayapatra_id        INT NOT NULL,
+    payment_no              INT NOT NULL,
+    due_date                DATE NOT NULL,
+    paid_date               DATE NULL,
+    gross_amount            DECIMAL(15,2) NOT NULL,
+    tds_amount              DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    net_amount              DECIMAL(15,2) NOT NULL,
+    credited_to_account_id  INT NULL,
+    status                  ENUM('upcoming','paid','missed') DEFAULT 'upcoming',
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sip_sanchayapatra FOREIGN KEY (sanchayapatra_id) REFERENCES sanchayapatra(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sip_account       FOREIGN KEY (credited_to_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS personal_lendings (
-    id                  INT AUTO_INCREMENT PRIMARY KEY,
-    user_id             INT NOT NULL,
-    direction           ENUM('lent','borrowed') NOT NULL,
-    counterparty_name   VARCHAR(100) NOT NULL,
-    counterparty_contact VARCHAR(50) NULL,
-    principal_amount    DECIMAL(15,2) NOT NULL,
-    outstanding_balance DECIMAL(15,2) NOT NULL,
-    interest_rate       DECIMAL(5,2) NULL,
-    start_date          DATE NOT NULL,
-    due_date            DATE NULL,
-    status              ENUM('active','settled','partial') DEFAULT 'active',
-    notes               TEXT NULL,
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_personal_lendings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                 INT NOT NULL,
+    direction               ENUM('lent','borrowed') NOT NULL,
+    counterparty_name       VARCHAR(100) NOT NULL,
+    counterparty_phone      VARCHAR(20) NULL,
+    counterparty_relation   VARCHAR(50) NULL,
+    principal               DECIMAL(15,2) NOT NULL,
+    annual_interest_rate    DECIMAL(5,2) DEFAULT 0.00,
+    given_date              DATE NOT NULL DEFAULT (CURRENT_DATE),
+    expected_return_date    DATE NULL,
+    currency                CHAR(3) DEFAULT 'BDT',
+    source_account_id       INT NULL,
+    purpose                 VARCHAR(255) NULL,
+    status                  ENUM('outstanding','partially_repaid','settled','written_off') DEFAULT 'outstanding',
+    settlement_date         DATE NULL,
+    note                    TEXT NULL,
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_personal_lendings_user    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_personal_lendings_account FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS lending_repayments (
-    id                  INT AUTO_INCREMENT PRIMARY KEY,
-    lending_id          INT NOT NULL,
-    repayment_date      DATE NOT NULL,
-    amount              DECIMAL(15,2) NOT NULL,
-    notes               TEXT NULL,
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_lr_lending FOREIGN KEY (lending_id) REFERENCES personal_lendings(id) ON DELETE CASCADE
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    personal_lending_id     INT NOT NULL,
+    repayment_date          DATE NOT NULL,
+    amount                  DECIMAL(15,2) NOT NULL,
+    credited_to_account_id  INT NULL,
+    note                    TEXT NULL,
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_lr_lending FOREIGN KEY (personal_lending_id) REFERENCES personal_lendings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lr_account FOREIGN KEY (credited_to_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS net_worth_snapshots (
@@ -458,45 +678,70 @@ const statements = [
   )`,
 
   `CREATE TABLE IF NOT EXISTS tax_records (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    user_id         INT NOT NULL,
-    tax_year        YEAR NOT NULL,
-    income_type     VARCHAR(50) NOT NULL,
-    gross_income    DECIMAL(15,2) NOT NULL,
-    tax_deducted    DECIMAL(15,2) DEFAULT 0,
-    tax_paid        DECIMAL(15,2) DEFAULT 0,
-    tax_due         DECIMAL(15,2) NOT NULL,
-    status          ENUM('pending','filed','paid') DEFAULT 'pending',
-    filing_date     DATE NULL,
-    payment_date    DATE NULL,
-    notes           TEXT NULL,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id                            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                       INT NOT NULL,
+    fiscal_year                   VARCHAR(10) NOT NULL,
+    tax_year_start                DATE NOT NULL DEFAULT (CURRENT_DATE),
+    tax_year_end                  DATE NOT NULL DEFAULT (CURRENT_DATE),
+    gross_income                  DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    salary_income                 DECIMAL(15,2) DEFAULT 0.00,
+    business_income               DECIMAL(15,2) DEFAULT 0.00,
+    rental_income                 DECIMAL(15,2) DEFAULT 0.00,
+    investment_income             DECIMAL(15,2) DEFAULT 0.00,
+    other_income                  DECIMAL(15,2) DEFAULT 0.00,
+    investment_in_dps             DECIMAL(15,2) DEFAULT 0.00,
+    investment_in_sanchayapatra   DECIMAL(15,2) DEFAULT 0.00,
+    investment_in_pf              DECIMAL(15,2) DEFAULT 0.00,
+    insurance_premium_paid        DECIMAL(15,2) DEFAULT 0.00,
+    total_allowable_investment    DECIMAL(15,2) DEFAULT 0.00,
+    investment_rebate_pct         DECIMAL(5,2) DEFAULT 15.00,
+    investment_rebate_amount      DECIMAL(15,2) DEFAULT 0.00,
+    taxable_income                DECIMAL(15,2) DEFAULT 0.00,
+    tax_at_slab                   DECIMAL(15,2) DEFAULT 0.00,
+    tax_liability_before_rebate   DECIMAL(15,2) DEFAULT 0.00,
+    tax_liability_after_rebate    DECIMAL(15,2) DEFAULT 0.00,
+    tds_deducted                  DECIMAL(15,2) DEFAULT 0.00,
+    advance_tax_paid              DECIMAL(15,2) DEFAULT 0.00,
+    net_tax_payable               DECIMAL(15,2) DEFAULT 0.00,
+    return_filed_date             DATE NULL,
+    assessment_year               VARCHAR(10) NULL,
+    acknowledgement_number        VARCHAR(50) NULL,
+    note                          TEXT NULL,
+    created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_tax_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE KEY uk_user_year (user_id, tax_year)
+    UNIQUE KEY uk_user_fiscal (user_id, fiscal_year)
   )`,
 
   `CREATE TABLE IF NOT EXISTS goals (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    user_id         INT NOT NULL,
-    name            VARCHAR(100) NOT NULL,
-    category        VARCHAR(50) NOT NULL,
-    target_amount   DECIMAL(15,2) NOT NULL,
-    current_amount  DECIMAL(15,2) DEFAULT 0,
-    target_date     DATE NOT NULL,
-    status          ENUM('active','completed','paused') DEFAULT 'active',
-    notes           TEXT NULL,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    user_id           INT NOT NULL,
+    name              VARCHAR(100) NOT NULL,
+    description       TEXT NULL,
+    target_amount     DECIMAL(15,2) NOT NULL,
+    current_amount    DECIMAL(15,2) DEFAULT 0.00,
+    target_date       DATE NULL,
+    linked_account_id INT NULL,
+    icon              VARCHAR(50) NULL,
+    color             VARCHAR(7) NULL,
+    priority          ENUM('high','medium','low') DEFAULT 'medium',
+    category          ENUM('emergency','travel','education','property','vehicle','other') NULL,
+    status            ENUM('in_progress','achieved','paused','abandoned') DEFAULT 'in_progress',
+    achieved_date     DATE NULL,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_goals_user    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_goals_account FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS goal_contributions (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    goal_id         INT NOT NULL,
-    amount          DECIMAL(15,2) NOT NULL,
-    contribution_date DATE NOT NULL,
-    notes           TEXT NULL,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_gc_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    goal_id             INT NOT NULL,
+    date                DATE NOT NULL,
+    amount              DECIMAL(15,2) NOT NULL,
+    source_account_id   INT NULL,
+    note                TEXT NULL,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_gc_goal    FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
+    CONSTRAINT fk_gc_account FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 
   `CREATE TABLE IF NOT EXISTS currencies (
@@ -643,6 +888,75 @@ const statements = [
     note                    TEXT NULL,
     created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_pf_contributions_pf FOREIGN KEY (provident_fund_id) REFERENCES provident_fund(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS loan_payments (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    loan_id             INT NOT NULL,
+    installment_no      SMALLINT NOT NULL,
+    due_date            DATE NOT NULL,
+    paid_date           DATE NULL,
+    emi_amount          DECIMAL(15,2) NOT NULL,
+    principal_portion   DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    interest_portion    DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    late_fee            DECIMAL(15,2) DEFAULT 0.00,
+    total_paid          DECIMAL(15,2) NULL,
+    outstanding_after   DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    source_account_id   INT NULL,
+    status              ENUM('upcoming','paid','missed','partial') DEFAULT 'upcoming',
+    receipt_attachment_id INT NULL,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_lp_loan    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lp_account FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS fdr_renewals (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    fdr_id          INT NOT NULL,
+    renewal_date    DATE NOT NULL,
+    new_principal   DECIMAL(15,2) NOT NULL,
+    new_rate        DECIMAL(5,2) NOT NULL,
+    new_maturity_date DATE NOT NULL,
+    renewal_no      TINYINT NOT NULL,
+    note            TEXT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_fdr_renewal_fdr FOREIGN KEY (fdr_id) REFERENCES fixed_deposits(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS recurring_rules (
+    id                        INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                   INT NOT NULL,
+    name                      VARCHAR(100) NOT NULL,
+    rule_type                 ENUM('income','expense','transfer','dps_installment','loan_emi','cc_payment','bill_payment','subscription','insurance_premium','goal_contribution') NOT NULL DEFAULT 'expense',
+    entity_type               VARCHAR(50) NULL,
+    entity_id                 INT NULL,
+    amount                    DECIMAL(15,2) NOT NULL,
+    category_id               INT NULL,
+    source_account_id         INT NULL,
+    destination_account_id    INT NULL,
+    frequency                 ENUM('daily','weekly','bi_weekly','monthly','quarterly','yearly') NOT NULL DEFAULT 'monthly',
+    day_of_month              TINYINT NULL,
+    day_of_week               TINYINT NULL,
+    start_date                DATE NOT NULL DEFAULT (CURRENT_DATE),
+    end_date                  DATE NULL,
+    next_due_date             DATE NOT NULL DEFAULT (CURRENT_DATE),
+    last_executed_date        DATE NULL,
+    auto_create_transaction   BOOLEAN DEFAULT TRUE,
+    description               VARCHAR(255) NULL,
+    is_active                 BOOLEAN DEFAULT TRUE,
+    created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS user_settings (
+    id                          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                     INT NOT NULL UNIQUE,
+    auto_net_worth_enabled      BOOLEAN DEFAULT FALSE,
+    auto_net_worth_frequency    VARCHAR(20) DEFAULT 'monthly',
+    next_net_worth_snapshot      DATE NULL,
+    created_at                  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
 ];
 
@@ -865,20 +1179,34 @@ async function migrate() {
     `UPDATE fixed_deposits SET compounding_frequency = 'yearly' WHERE compounding_frequency IS NULL OR compounding_frequency = ''`,
     `UPDATE fixed_deposits SET interest_payout_frequency = 'on_maturity' WHERE interest_payout_frequency IS NULL OR interest_payout_frequency = ''`,
     `UPDATE fixed_deposits SET status = 'active' WHERE status IS NULL`,
-    // Add fixed_deposits enhancement columns
-    `ALTER TABLE fixed_deposits ADD COLUMN compounding_frequency ENUM('monthly','quarterly','half_yearly','yearly') DEFAULT 'yearly' AFTER interest_rate`,
-    `ALTER TABLE fixed_deposits ADD COLUMN tenure_days INT NULL AFTER compounding_frequency`,
-    `ALTER TABLE fixed_deposits ADD COLUMN tenure_months INT NULL AFTER tenure_days`,
-    `ALTER TABLE fixed_deposits ADD COLUMN projected_maturity_value DECIMAL(15,2) NULL AFTER maturity_amount`,
-    `ALTER TABLE fixed_deposits ADD COLUMN interest_payout_frequency ENUM('monthly','quarterly','half_yearly','yearly','maturity') DEFAULT 'maturity' AFTER projected_maturity_value`,
-    `ALTER TABLE fixed_deposits ADD COLUMN interest_payout_account_id INT NULL AFTER interest_payout_frequency`,
-    `ALTER TABLE fixed_deposits ADD COLUMN withholding_tax_rate DECIMAL(5,2) NULL AFTER interest_payout_account_id`,
-    `ALTER TABLE fixed_deposits ADD COLUMN auto_renewal BOOLEAN DEFAULT FALSE AFTER withholding_tax_rate`,
-    `ALTER TABLE fixed_deposits ADD COLUMN renewal_count INT DEFAULT 0 AFTER auto_renewal`,
-    `ALTER TABLE fixed_deposits ADD COLUMN maturity_credited_to_id INT NULL AFTER renewal_count`,
-    `ALTER TABLE fixed_deposits ADD COLUMN status ENUM('active','matured','broken','withdrawn') DEFAULT 'active' AFTER maturity_credited_to_id`,
-    `ALTER TABLE fixed_deposits ADD COLUMN note TEXT NULL AFTER status`,
-    // Add loans enhancement columns
+    // ERD V2 Alignment: Sanchayapatra - Rename columns
+    `ALTER TABLE sanchayapatra CHANGE COLUMN interest_rate annual_interest_rate DECIMAL(5,2) NOT NULL`,
+    `ALTER TABLE sanchayapatra CHANGE COLUMN maturity_value actual_maturity_value DECIMAL(15,2) NULL`,
+    // ERD V2 Alignment: Sanchayapatra - Add missing columns
+    `ALTER TABLE sanchayapatra ADD COLUMN institution_name VARCHAR(100) NOT NULL AFTER user_id`,
+    `ALTER TABLE sanchayapatra ADD COLUMN certificate_number VARCHAR(50) NOT NULL AFTER institution_name`,
+    `ALTER TABLE sanchayapatra ADD COLUMN projected_maturity_value DECIMAL(15,2) AFTER maturity_date`,
+    `ALTER TABLE sanchayapatra ADD COLUMN withholding_tax_rate DECIMAL(5,2) DEFAULT 10.00 AFTER actual_maturity_value`,
+    `ALTER TABLE sanchayapatra ADD COLUMN encashment_date DATE NULL AFTER status`,
+    `ALTER TABLE sanchayapatra ADD COLUMN encashment_value DECIMAL(15,2) NULL AFTER encashment_date`,
+    `ALTER TABLE sanchayapatra ADD COLUMN encashment_credited_to_id INT NULL AFTER encashment_value`,
+    `ALTER TABLE sanchayapatra ADD COLUMN note TEXT NULL AFTER encashment_credited_to_id`,
+    `ALTER TABLE sanchayapatra ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER note`,
+    `ALTER TABLE sanchayapatra ADD COLUMN deleted_at TIMESTAMP NULL AFTER updated_at`,
+    // ERD V2 Alignment: Sanchayapatra - Update status enum
+    `ALTER TABLE sanchayapatra MODIFY COLUMN status ENUM('active','matured','encashed','transferred') DEFAULT 'active'`,
+    // ERD V2 Alignment: Sanchayapatra - Add foreign key constraint
+    `SET @fk_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sanchayapatra' AND CONSTRAINT_NAME = 'fk_sanchayapatra_encashment_account')`,
+    `SET @fk_sql = IF(@fk_exists = 0, 'ALTER TABLE sanchayapatra ADD CONSTRAINT fk_sanchayapatra_encashment_account FOREIGN KEY (encashment_credited_to_id) REFERENCES accounts(id) ON DELETE SET NULL', 'SELECT ''Constraint already exists'' AS message')`,
+    `PREPARE fk_stmt FROM @fk_sql`,
+    `EXECUTE fk_stmt`,
+    `DEALLOCATE PREPARE fk_stmt`,
+    // ERD V2 Alignment: Sanchayapatra - Data migration
+    `UPDATE sanchayapatra SET institution_name = 'Unknown' WHERE institution_name IS NULL OR institution_name = ''`,
+    `UPDATE sanchayapatra SET certificate_number = CONCAT('CERT-', id) WHERE certificate_number IS NULL OR certificate_number = ''`,
+    `UPDATE sanchayapatra SET withholding_tax_rate = 10.00 WHERE withholding_tax_rate IS NULL OR withholding_tax_rate = 0`,
+    `UPDATE sanchayapatra SET status = 'active' WHERE status IS NULL`,
+    // Add loan enhancement columns
     `ALTER TABLE loans ADD COLUMN loan_type ENUM('personal','home','auto','education','business','other') NULL AFTER name`,
     `ALTER TABLE loans ADD COLUMN purpose VARCHAR(255) NULL AFTER loan_type`,
     `ALTER TABLE loans ADD COLUMN interest_type ENUM('reducing_balance','flat') DEFAULT 'reducing_balance' AFTER interest_rate`,
@@ -987,7 +1315,7 @@ async function migrate() {
     `ALTER TABLE tax_records ADD COLUMN acknowledgement_number VARCHAR(50) NULL AFTER assessment_year`,
     // Add budgets enhancement columns
     `ALTER TABLE budgets ADD COLUMN name VARCHAR(100) NULL AFTER user_id`,
-    `ALTER TABLE budgets ADD COLUMN category_id INT NULL AFTER name`,
+    `ALTER TABLE budgets ADD COLUMN category_id VARCHAR(80) NULL AFTER name`,
     `ALTER TABLE budgets ADD COLUMN start_date DATE NULL AFTER period`,
     `ALTER TABLE budgets ADD COLUMN end_date DATE NULL AFTER start_date`,
     `ALTER TABLE budgets ADD COLUMN spent_amount DECIMAL(15,2) DEFAULT 0.00 AFTER end_date`,
@@ -996,6 +1324,9 @@ async function migrate() {
     `ALTER TABLE budgets ADD COLUMN alert_threshold_pct TINYINT DEFAULT 80 AFTER utilization_pct`,
     `ALTER TABLE budgets ADD COLUMN rollover_unspent BOOLEAN DEFAULT FALSE AFTER alert_threshold_pct`,
     `ALTER TABLE budgets ADD COLUMN is_active BOOLEAN DEFAULT TRUE AFTER rollover_unspent`,
+    // ERD V2 Alignment: Fix budgets.category_id type to VARCHAR(80) (matches transactions.category_id)
+    `ALTER TABLE budgets DROP FOREIGN KEY fk_budgets_category`,
+    `ALTER TABLE budgets MODIFY COLUMN category_id VARCHAR(80) NULL`,
     // Add goals enhancement columns
     `ALTER TABLE goals ADD COLUMN description TEXT NULL AFTER name`,
     `ALTER TABLE goals ADD COLUMN monthly_required DECIMAL(15,2) DEFAULT 0.00 AFTER target_date`,
@@ -1016,14 +1347,73 @@ async function migrate() {
     `ALTER TABLE notifications ADD COLUMN channel ENUM('in_app','push','email','sms') DEFAULT 'in_app' AFTER severity`,
     `ALTER TABLE notifications ADD COLUMN read_at TIMESTAMP NULL AFTER is_read`,
     `ALTER TABLE notifications ADD COLUMN scheduled_for TIMESTAMP NULL AFTER read_at`,
+
+    // ── ERD Alignment: credit_cards column renames ──────────────────────────
+    `ALTER TABLE credit_cards CHANGE COLUMN name card_name VARCHAR(100) NOT NULL`,
+    `ALTER TABLE credit_cards CHANGE COLUMN limit_amt credit_limit DECIMAL(15,2) NOT NULL DEFAULT 0.00`,
+    `ALTER TABLE credit_cards CHANGE COLUMN due_amount current_outstanding DECIMAL(15,2) DEFAULT 0.00`,
+    `ALTER TABLE credit_cards ADD COLUMN issuer VARCHAR(100) NOT NULL DEFAULT 'Unknown' AFTER user_id`,
+    `ALTER TABLE credit_cards DROP COLUMN due_date`,
+
+    // ── ERD Alignment: loans column renames ─────────────────────────────────
+    `ALTER TABLE loans CHANGE COLUMN name lender_name VARCHAR(100) NOT NULL`,
+    `ALTER TABLE loans CHANGE COLUMN principal principal_amount DECIMAL(15,2) NOT NULL`,
+    `ALTER TABLE loans CHANGE COLUMN remaining outstanding_balance DECIMAL(15,2) NOT NULL`,
+    `ALTER TABLE loans CHANGE COLUMN monthly_emi emi_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00`,
+    `ALTER TABLE loans CHANGE COLUMN interest_rate annual_interest_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00`,
+    `ALTER TABLE loans ADD COLUMN loan_type ENUM('personal','home','auto','student','business','informal') NOT NULL DEFAULT 'personal' AFTER lender_name`,
+    `ALTER TABLE loans ADD COLUMN interest_type ENUM('flat','reducing_balance') NOT NULL DEFAULT 'reducing_balance' AFTER annual_interest_rate`,
+    `ALTER TABLE loans ADD COLUMN disbursement_date DATE NULL AFTER interest_type`,
+    `ALTER TABLE loans ADD COLUMN first_emi_date DATE NULL AFTER disbursement_date`,
+    `ALTER TABLE loans ADD COLUMN status ENUM('active','closed','defaulted','restructured') DEFAULT 'active' AFTER prepayment_penalty_pct`,
+
+    // ── ERD Alignment: sanchayapatra column renames ──────────────────────────
+    `ALTER TABLE sanchayapatra CHANGE COLUMN principal_amount face_value DECIMAL(15,2) NOT NULL`,
+    `ALTER TABLE sanchayapatra CHANGE COLUMN purchase_date issue_date DATE NOT NULL`,
+    `ALTER TABLE sanchayapatra MODIFY COLUMN scheme_type ENUM('three_month_profit','five_year_bangladesh','family_savings','pensioner_savings','wage_earner') NOT NULL DEFAULT 'five_year_bangladesh'`,
+    `ALTER TABLE sanchayapatra MODIFY COLUMN status ENUM('active','matured','encashed') DEFAULT 'active'`,
+    `ALTER TABLE sanchayapatra ADD COLUMN interest_payment_frequency ENUM('monthly','quarterly','on_maturity') NOT NULL DEFAULT 'on_maturity' AFTER annual_interest_rate`,
+    `ALTER TABLE sanchayapatra ADD COLUMN interest_payout_account_id INT NULL AFTER maturity_date`,
+    `ALTER TABLE sanchayapatra ADD COLUMN source_account_id INT NULL AFTER interest_payout_account_id`,
+    `ALTER TABLE sanchayapatra ADD COLUMN tin_required BOOLEAN DEFAULT TRUE AFTER withholding_tax_rate`,
+
+    // ── ERD Alignment: personal_lendings column renames ──────────────────────
+    `ALTER TABLE personal_lendings CHANGE COLUMN counterparty_contact counterparty_phone VARCHAR(20) NULL`,
+    `ALTER TABLE personal_lendings CHANGE COLUMN principal_amount principal DECIMAL(15,2) NOT NULL`,
+    `ALTER TABLE personal_lendings CHANGE COLUMN interest_rate annual_interest_rate DECIMAL(5,2) DEFAULT 0.00`,
+    `ALTER TABLE personal_lendings CHANGE COLUMN start_date given_date DATE NOT NULL`,
+    `ALTER TABLE personal_lendings CHANGE COLUMN due_date expected_return_date DATE NULL`,
+    `ALTER TABLE personal_lendings CHANGE COLUMN notes note TEXT NULL`,
+    `ALTER TABLE personal_lendings MODIFY COLUMN status ENUM('outstanding','partially_repaid','settled','written_off') DEFAULT 'outstanding'`,
+    `ALTER TABLE personal_lendings DROP COLUMN outstanding_balance`,
+    `ALTER TABLE lending_repayments CHANGE COLUMN lending_id personal_lending_id INT NOT NULL`,
+    `ALTER TABLE lending_repayments CHANGE COLUMN notes note TEXT NULL`,
+    `ALTER TABLE lending_repayments ADD COLUMN credited_to_account_id INT NULL AFTER amount`,
+
+    // ── ERD Alignment: goals enum fix ────────────────────────────────────────
+    `ALTER TABLE goals MODIFY COLUMN status ENUM('in_progress','achieved','paused','abandoned') DEFAULT 'in_progress'`,
+    `UPDATE goals SET status = 'in_progress' WHERE status = 'active'`,
+    `UPDATE goals SET status = 'achieved'   WHERE status = 'completed'`,
+    `ALTER TABLE goals ADD COLUMN source_account_id INT NULL AFTER linked_account_id`,
+    `ALTER TABLE goal_contributions CHANGE COLUMN contribution_date date DATE NOT NULL`,
+    `ALTER TABLE goal_contributions CHANGE COLUMN notes note TEXT NULL`,
+    `ALTER TABLE goal_contributions ADD COLUMN source_account_id INT NULL AFTER amount`,
+
+    // ── ERD Alignment: tax_records rename ────────────────────────────────────
+    `ALTER TABLE tax_records CHANGE COLUMN filing_date return_filed_date DATE NULL`,
+    `ALTER TABLE tax_records CHANGE COLUMN notes note TEXT NULL`,
+    `ALTER TABLE tax_records CHANGE COLUMN tax_deducted tds_deducted DECIMAL(15,2) DEFAULT 0.00`,
+    `ALTER TABLE tax_records ADD COLUMN total_allowable_investment DECIMAL(15,2) DEFAULT 0.00`,
+
+    // ── ERD Alignment: users google_id ──────────────────────────────────────
+    `ALTER TABLE users ADD COLUMN google_id VARCHAR(100) NULL AFTER id`,
+    `ALTER TABLE users CHANGE COLUMN avatar_url profile_photo_url VARCHAR(500) NULL`,
   ];
   for (const sql of alterations) {
     try {
       await conn.query(sql);
     } catch (e) {
-      // ER_DUP_FIELDNAME (1060) = column already exists — safe to ignore.
-      // ER_FK_DUP_NAME (1826) = constraint already exists — safe to ignore.
-      if (e.errno !== 1060 && e.errno !== 1826) throw e;
+      if (!SAFE_ERRNO.has(e.errno)) throw e;
     }
   }
 

@@ -111,11 +111,12 @@ router.post('/:id/post', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Income source must have an account to post income.' });
     }
     await connection.query(
-      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, income.account_id, 'credit', income.amount, 'Income', income.name],
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes)
+       VALUES (?, ?, 'income', ?, 'BDT', CURDATE(), 'Income', 'account', ?, ?)`,
+      [req.user.id, income.account_id, income.amount, income.name, income.name],
     );
     await connection.query(
-      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+      'UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?',
       [income.amount, income.account_id, req.user.id],
     );
     const nextPay = new Date(income.next_pay_date || new Date());

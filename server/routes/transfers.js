@@ -56,7 +56,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     // Check sufficient balance
     const totalDebit = parseFloat(amount) + (fee && fee_account_id === from_account_id ? parseFloat(fee) : 0);
-    if (fromAccount[0].balance < totalDebit) {
+    if (fromAccount[0].current_balance < totalDebit) {
       await conn.rollback();
       return res.status(400).json({ error: 'Insufficient balance' });
     }
@@ -72,41 +72,41 @@ router.post('/', requireAuth, async (req, res, next) => {
     // Create debit transaction for from_account
     const debitAmount = parseFloat(amount) + (fee && fee_account_id === from_account_id ? parseFloat(fee) : 0);
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'debit', ?, 'Transfer', ?, 'transfer', ?, ?)`,
-      [req.user.id, from_account_id, debitAmount, note || `Transfer to ${toAccount[0].name}`, transferId, transfer_date]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+       VALUES (?, ?, 'transfer_debit', ?, 'BDT', ?, 'Transfer', 'account', ?, ?, ?)`,
+      [req.user.id, from_account_id, debitAmount, transfer_date || new Date().toISOString().slice(0,10), transferId, toAccount[0].name, note || `Transfer to ${toAccount[0].name}`]
     );
 
     // Update from_account balance
     await conn.query(
-      'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-      [debitAmount, from_account_id]
+      'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+      [debitAmount, from_account_id, req.user.id]
     );
 
     // Create credit transaction for to_account
     const creditAmount = converted_amount || amount;
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'credit', ?, 'Transfer', ?, 'transfer', ?, ?)`,
-      [req.user.id, to_account_id, creditAmount, note || `Transfer from ${fromAccount[0].name}`, transferId, transfer_date]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+       VALUES (?, ?, 'transfer_credit', ?, 'BDT', ?, 'Transfer', 'account', ?, ?, ?)`,
+      [req.user.id, to_account_id, creditAmount, transfer_date || new Date().toISOString().slice(0,10), transferId, fromAccount[0].name, note || `Transfer from ${fromAccount[0].name}`]
     );
 
     // Update to_account balance
     await conn.query(
-      'UPDATE accounts SET balance = balance + ? WHERE id = ?',
-      [creditAmount, to_account_id]
+      'UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?',
+      [creditAmount, to_account_id, req.user.id]
     );
 
     // If fee is deducted from a different account
     if (fee && fee_account_id && fee_account_id !== from_account_id) {
       await conn.query(
-        `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-         VALUES (?, ?, 'debit', ?, 'Fee', ?, 'transfer', ?, ?)`,
-        [req.user.id, fee_account_id, fee, note || `Transfer fee`, transferId, transfer_date]
+        `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, notes)
+         VALUES (?, ?, 'expense', ?, 'BDT', ?, 'Fee', 'account', ?, ?)`,
+        [req.user.id, fee_account_id, fee, transfer_date || new Date().toISOString().slice(0,10), transferId, `Transfer fee`]
       );
       await conn.query(
-        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-        [fee, fee_account_id]
+        'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+        [fee, fee_account_id, req.user.id]
       );
     }
 
@@ -149,37 +149,37 @@ router.post('/:id/reverse', requireAuth, async (req, res, next) => {
     // Reverse the transfer - credit back to from_account
     const debitAmount = parseFloat(transfer.amount) + (transfer.fee_account_id === transfer.from_account_id ? parseFloat(transfer.fee) : 0);
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'credit', ?, 'Transfer Reversal', ?, 'transfer', ?, NOW())`,
-      [req.user.id, transfer.from_account_id, debitAmount, `Reverse transfer to account ID ${transfer.to_account_id}`, transferId]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, notes)
+       VALUES (?, ?, 'transfer_credit', ?, 'BDT', CURDATE(), 'Transfer', 'account', ?, ?)`,
+      [req.user.id, transfer.from_account_id, debitAmount, transferId, `Reverse transfer to account ID ${transfer.to_account_id}`]
     );
     await conn.query(
-      'UPDATE accounts SET balance = balance + ? WHERE id = ?',
-      [debitAmount, transfer.from_account_id]
+      'UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?',
+      [debitAmount, transfer.from_account_id, req.user.id]
     );
 
     // Debit back from to_account
     const creditAmount = transfer.converted_amount || transfer.amount;
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'debit', ?, 'Transfer Reversal', ?, 'transfer', ?, NOW())`,
-      [req.user.id, transfer.to_account_id, creditAmount, `Reverse transfer from account ID ${transfer.from_account_id}`, transferId]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, notes)
+       VALUES (?, ?, 'transfer_debit', ?, 'BDT', CURDATE(), 'Transfer', 'account', ?, ?)`,
+      [req.user.id, transfer.to_account_id, creditAmount, transferId, `Reverse transfer from account ID ${transfer.from_account_id}`]
     );
     await conn.query(
-      'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-      [creditAmount, transfer.to_account_id]
+      'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+      [creditAmount, transfer.to_account_id, req.user.id]
     );
 
     // If fee was deducted from a different account, refund it
     if (transfer.fee && transfer.fee_account_id && transfer.fee_account_id !== transfer.from_account_id) {
       await conn.query(
-        `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-         VALUES (?, ?, 'credit', ?, 'Fee Refund', ?, 'transfer', ?, NOW())`,
-        [req.user.id, transfer.fee_account_id, transfer.fee, `Transfer fee refund`, transferId]
+        `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, notes)
+         VALUES (?, ?, 'income', ?, 'BDT', CURDATE(), 'Fee', 'account', ?, ?)`,
+        [req.user.id, transfer.fee_account_id, transfer.fee, transferId, `Transfer fee refund`]
       );
       await conn.query(
-        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
-        [transfer.fee, transfer.fee_account_id]
+        'UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?',
+        [transfer.fee, transfer.fee_account_id, req.user.id]
       );
     }
 

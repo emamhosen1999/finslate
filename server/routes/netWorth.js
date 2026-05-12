@@ -22,49 +22,51 @@ router.get('/current', requireAuth, async (req, res, next) => {
   try {
     // Get account balances (assets)
     const [accounts] = await conn.query(
-      'SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_balance), 0) as total FROM accounts WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get DPS values (assets)
     const [dps] = await conn.query(
-      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ?',
+      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get fixed deposit values (assets)
     const [fds] = await conn.query(
-      'SELECT COALESCE(SUM(principal), 0) as total FROM fixed_deposits WHERE user_id = ?',
+      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM fixed_deposits WHERE user_id = ? AND deleted_at IS NULL AND status = "active"',
       [req.user.id]
     );
 
     // Get Sanchayapatra values (assets)
     const [sanchayapatra] = await conn.query(
-      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
+      'SELECT COALESCE(SUM(face_value), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get investment values (assets)
     const [investments] = await conn.query(
-      'SELECT COALESCE(SUM(quantity * COALESCE(current_price, buy_price)), 0) as total FROM investments WHERE user_id = ?',
+      'SELECT COALESCE(SUM(quantity_held * COALESCE(current_price, average_buy_price)), 0) as total FROM investments WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get credit card debt (liabilities)
     const [creditCards] = await conn.query(
-      'SELECT COALESCE(SUM(due_amount), 0) as total FROM credit_cards WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_outstanding), 0) as total FROM credit_cards WHERE user_id = ? AND is_active = 1',
       [req.user.id]
     );
 
     // Get loan balances (liabilities)
     const [loans] = await conn.query(
-      'SELECT COALESCE(SUM(remaining), 0) as total FROM loans WHERE user_id = ?',
+      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM loans WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get personal lending (borrowed = liability, lent = asset)
     const [personalLending] = await conn.query(
-      'SELECT COALESCE(SUM(CASE WHEN direction = "borrowed" THEN outstanding_balance ELSE 0 END), 0) as borrowed, COALESCE(SUM(CASE WHEN direction = "lent" THEN outstanding_balance ELSE 0 END), 0) as lent FROM personal_lendings WHERE user_id = ? AND status = "active"',
+      `SELECT COALESCE(SUM(CASE WHEN pl.direction = 'borrowed' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) AS borrowed,
+              COALESCE(SUM(CASE WHEN pl.direction = 'lent' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) AS lent
+       FROM personal_lendings pl WHERE pl.user_id = ? AND pl.status IN ('outstanding','partially_repaid')`,
       [req.user.id]
     );
 
@@ -73,9 +75,9 @@ router.get('/current', requireAuth, async (req, res, next) => {
     const netWorth = totalAssets - totalLiabilities;
 
     res.json({
-      total_assets: totalAssets,
-      total_liabilities: totalLiabilities,
-      net_worth: netWorth,
+      total_assets: Math.round(totalAssets * 100) / 100,
+      total_liabilities: Math.round(totalLiabilities * 100) / 100,
+      net_worth: Math.round(netWorth * 100) / 100,
       breakdown: {
         account_balance: parseFloat(accounts[0].total),
         dps_value: parseFloat(dps[0].total),
@@ -109,55 +111,56 @@ router.post('/', requireAuth, async (req, res, next) => {
     );
 
     if (existing.length) {
-      await conn.rollback();
       return res.status(400).json({ error: 'Snapshot already exists for this date' });
     }
 
     // Get account balances (assets)
     const [accounts] = await conn.query(
-      'SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_balance), 0) as total FROM accounts WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get DPS values (assets)
     const [dps] = await conn.query(
-      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ?',
+      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get fixed deposit values (assets)
     const [fds] = await conn.query(
-      'SELECT COALESCE(SUM(principal), 0) as total FROM fixed_deposits WHERE user_id = ?',
+      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM fixed_deposits WHERE user_id = ? AND deleted_at IS NULL AND status = "active"',
       [req.user.id]
     );
 
     // Get Sanchayapatra values (assets)
     const [sanchayapatra] = await conn.query(
-      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
+      'SELECT COALESCE(SUM(face_value), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get investment values (assets)
     const [investments] = await conn.query(
-      'SELECT COALESCE(SUM(quantity * COALESCE(current_price, buy_price)), 0) as total FROM investments WHERE user_id = ?',
+      'SELECT COALESCE(SUM(quantity_held * COALESCE(current_price, average_buy_price)), 0) as total FROM investments WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get credit card debt (liabilities)
     const [creditCards] = await conn.query(
-      'SELECT COALESCE(SUM(due_amount), 0) as total FROM credit_cards WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_outstanding), 0) as total FROM credit_cards WHERE user_id = ? AND is_active = 1',
       [req.user.id]
     );
 
     // Get loan balances (liabilities)
     const [loans] = await conn.query(
-      'SELECT COALESCE(SUM(remaining), 0) as total FROM loans WHERE user_id = ?',
+      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM loans WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get personal lending (borrowed = liability, lent = asset)
     const [personalLending] = await conn.query(
-      'SELECT COALESCE(SUM(CASE WHEN direction = "borrowed" THEN outstanding_balance ELSE 0 END), 0) as borrowed, COALESCE(SUM(CASE WHEN direction = "lent" THEN outstanding_balance ELSE 0 END), 0) as lent FROM personal_lendings WHERE user_id = ? AND status = "active"',
+      `SELECT COALESCE(SUM(CASE WHEN pl.direction = 'borrowed' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) AS borrowed,
+              COALESCE(SUM(CASE WHEN pl.direction = 'lent' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) AS lent
+       FROM personal_lendings pl WHERE pl.user_id = ? AND pl.status IN ('outstanding','partially_repaid')`,
       [req.user.id]
     );
 
@@ -264,49 +267,51 @@ router.post('/trigger-snapshot', requireAuth, async (req, res, next) => {
 
     // Get account balances (assets)
     const [accounts] = await conn.query(
-      'SELECT COALESCE(SUM(balance), 0) as total FROM accounts WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_balance), 0) as total FROM accounts WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get DPS values (assets)
     const [dps] = await conn.query(
-      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ?',
+      'SELECT COALESCE(SUM(total_deposited), 0) as total FROM dps WHERE user_id = ? AND deleted_at IS NULL',
       [req.user.id]
     );
 
     // Get fixed deposit values (assets)
     const [fds] = await conn.query(
-      'SELECT COALESCE(SUM(principal), 0) as total FROM fixed_deposits WHERE user_id = ?',
+      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM fixed_deposits WHERE user_id = ? AND deleted_at IS NULL AND status = "active"',
       [req.user.id]
     );
 
     // Get Sanchayapatra values (assets)
     const [sanchayapatra] = await conn.query(
-      'SELECT COALESCE(SUM(principal_amount), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
+      'SELECT COALESCE(SUM(face_value), 0) as total FROM sanchayapatra WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get investment values (assets)
     const [investments] = await conn.query(
-      'SELECT COALESCE(SUM(quantity * COALESCE(current_price, buy_price)), 0) as total FROM investments WHERE user_id = ?',
+      'SELECT COALESCE(SUM(quantity_held * COALESCE(current_price, average_buy_price)), 0) as total FROM investments WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get credit card debt (liabilities)
     const [creditCards] = await conn.query(
-      'SELECT COALESCE(SUM(due_amount), 0) as total FROM credit_cards WHERE user_id = ?',
+      'SELECT COALESCE(SUM(current_outstanding), 0) as total FROM credit_cards WHERE user_id = ? AND is_active = 1',
       [req.user.id]
     );
 
     // Get loan balances (liabilities)
     const [loans] = await conn.query(
-      'SELECT COALESCE(SUM(remaining), 0) as total FROM loans WHERE user_id = ?',
+      'SELECT COALESCE(SUM(outstanding_balance), 0) as total FROM loans WHERE user_id = ? AND status = "active"',
       [req.user.id]
     );
 
     // Get personal lending (borrowed = liability, lent = asset)
     const [personalLending] = await conn.query(
-      'SELECT COALESCE(SUM(CASE WHEN direction = "borrowed" THEN outstanding_balance ELSE 0 END), 0) as borrowed, COALESCE(SUM(CASE WHEN direction = "lent" THEN outstanding_balance ELSE 0 END), 0) as lent FROM personal_lendings WHERE user_id = ? AND status = "active"',
+      `SELECT COALESCE(SUM(CASE WHEN pl.direction = 'borrowed' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) as borrowed,
+              COALESCE(SUM(CASE WHEN pl.direction = 'lent' THEN (pl.principal - COALESCE((SELECT SUM(lr.amount) FROM lending_repayments lr WHERE lr.personal_lending_id = pl.id), 0)) ELSE 0 END), 0) as lent
+       FROM personal_lendings pl WHERE pl.user_id = ? AND pl.status IN ('outstanding','partially_repaid')`,
       [req.user.id]
     );
 

@@ -28,6 +28,8 @@ import Goals from './pages/Goals.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Reports from './pages/Reports.jsx';
 import CurrencyManagement from './pages/CurrencyManagement.jsx';
+import Tags from './pages/Tags.jsx';
+import Categories from './pages/Categories.jsx';
 import Profile from './pages/Profile.jsx';
 
 function AuthGate({ children }) {
@@ -241,6 +243,22 @@ export default function App() {
           element={
             <AuthGate>
               <CurrencyManagement />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/tags"
+          element={
+            <AuthGate>
+              <Tags />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/categories"
+          element={
+            <AuthGate>
+              <Categories />
             </AuthGate>
           }
         />

@@ -104,18 +104,21 @@ router.post('/:id/process', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Subscription is not active' });
     }
 
+    const payAccountId = account_id || sub.account_id;
+    const payDate = payment_date || new Date().toISOString().slice(0, 10);
+
     // Create transaction
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'debit', ?, 'Subscription', ?, 'subscription', ?, ?)`,
-      [req.user.id, account_id || sub.account_id, sub.amount, sub.name, req.params.id, payment_date]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+       VALUES (?, ?, 'expense', ?, 'BDT', ?, 'Subscription', 'account', ?, ?, ?)`,
+      [req.user.id, payAccountId, sub.amount, payDate, req.params.id, sub.service_name || sub.name, sub.name]
     );
 
     // Update account balance
-    if (account_id || sub.account_id) {
+    if (payAccountId) {
       await conn.query(
-        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-        [sub.amount, account_id || sub.account_id]
+        'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+        [sub.amount, payAccountId, req.user.id]
       );
     }
 

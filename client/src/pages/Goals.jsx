@@ -28,15 +28,15 @@ export default function Goals() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    category: 'savings',
+    category: 'emergency',
     target_amount: '',
     target_date: '',
-    notes: '',
+    description: '',
   });
   const [contributionData, setContributionData] = useState({
     amount: '',
-    contribution_date: new Date().toISOString().split('T')[0],
-    notes: '',
+    date: new Date().toISOString().split('T')[0],
+    note: '',
   });
 
   const loadGoals = async () => {
@@ -59,10 +59,10 @@ export default function Goals() {
     setEditingId(null);
     setFormData({
       name: '',
-      category: 'savings',
+      category: 'emergency',
       target_amount: '',
       target_date: '',
-      notes: '',
+      description: '',
     });
     setAddOpen(true);
   };
@@ -74,7 +74,7 @@ export default function Goals() {
       category: goal.category,
       target_amount: goal.target_amount,
       target_date: goal.target_date,
-      notes: goal.notes,
+      description: goal.description,
     });
     setAddOpen(true);
   };
@@ -83,8 +83,8 @@ export default function Goals() {
     setSelectedGoal(goal);
     setContributionData({
       amount: '',
-      contribution_date: new Date().toISOString().split('T')[0],
-      notes: '',
+      date: new Date().toISOString().split('T')[0],
+      note: '',
     });
     setContributionOpen(true);
   };
@@ -124,7 +124,7 @@ export default function Goals() {
   };
 
   const handleContribution = async () => {
-    if (!contributionData.amount || !contributionData.contribution_date) {
+    if (!contributionData.amount || !contributionData.date) {
       toast.push('Amount and date are required', 'error');
       return;
     }
@@ -175,17 +175,17 @@ export default function Goals() {
                   className="rounded-full flex items-center justify-center flex-shrink-0"
                   style={{
                     width: 40, height: 40,
-                    background: g.status === 'completed' ? 'var(--positive-soft)' : 'var(--accent-soft)',
-                    color: g.status === 'completed' ? 'var(--positive)' : 'var(--accent)',
+                    background: g.status === 'achieved' ? 'var(--positive-soft)' : 'var(--accent-soft)',
+                    color: g.status === 'achieved' ? 'var(--positive)' : 'var(--accent)',
                   }}
                 >
-                  {g.status === 'completed' ? <Circle size={20} fill="currentColor" /> : <Target size={20} />}
+                  {g.status === 'achieved' ? <Circle size={20} fill="currentColor" /> : <Target size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="font-semibold truncate">{g.name}</div>
                     <div className="flex items-center gap-1">
-                      {g.status !== 'completed' && (
+                      {g.status !== 'achieved' && (
                         <button
                           type="button"
                           onClick={() => openContribution(g)}
@@ -226,7 +226,7 @@ export default function Goals() {
                         className="h-2 rounded-full transition-all"
                         style={{
                           width: `${progress}%`,
-                          background: g.status === 'completed' ? 'var(--positive)' : 'var(--accent)',
+                          background: g.status === 'achieved' ? 'var(--positive)' : 'var(--accent)',
                         }}
                       />
                     </div>
@@ -250,8 +250,8 @@ export default function Goals() {
                     <span
                       className="text-[10px] uppercase rounded-full px-2 py-[2px]"
                       style={{
-                        background: g.status === 'completed' ? 'var(--positive-soft)' : 'var(--accent-soft)',
-                        color: g.status === 'completed' ? 'var(--positive)' : 'var(--accent)',
+                        background: g.status === 'achieved' ? 'var(--positive-soft)' : 'var(--accent-soft)',
+                        color: g.status === 'achieved' ? 'var(--positive)' : 'var(--accent)',
                       }}
                     >
                       {g.status}
@@ -282,11 +282,11 @@ export default function Goals() {
 
         <label className="block text-xs text-text-muted mb-1">Category</label>
         <select className="input mb-3" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-          <option value="savings">Savings</option>
+          <option value="emergency">Emergency</option>
           <option value="travel">Travel</option>
-          <option value="home">Home</option>
-          <option value="car">Car</option>
           <option value="education">Education</option>
+          <option value="property">Property</option>
+          <option value="vehicle">Vehicle</option>
           <option value="other">Other</option>
         </select>
 
@@ -313,8 +313,8 @@ export default function Goals() {
           className="input mb-4"
           rows={2}
           placeholder="Any additional notes..."
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleSubmit}>
@@ -344,8 +344,8 @@ export default function Goals() {
         <input
           className="input mb-3"
           type="date"
-          value={contributionData.contribution_date}
-          onChange={(e) => setContributionData({ ...contributionData, contribution_date: e.target.value })}
+          value={contributionData.date}
+          onChange={(e) => setContributionData({ ...contributionData, date: e.target.value })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Notes (optional)</label>
@@ -353,8 +353,8 @@ export default function Goals() {
           className="input mb-4"
           rows={2}
           placeholder="Any notes..."
-          value={contributionData.notes}
-          onChange={(e) => setContributionData({ ...contributionData, notes: e.target.value })}
+          value={contributionData.note}
+          onChange={(e) => setContributionData({ ...contributionData, note: e.target.value })}
         />
 
         <ActionButton variant="primary" className="w-full" loading={contributionLoading} onClick={handleContribution}>

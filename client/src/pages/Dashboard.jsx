@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState(null);
 
   const filteredTx = (transactions || []).filter((t) =>
-    categoryFilter ? t.category === categoryFilter : true,
+    categoryFilter ? t.category_id === categoryFilter : true,
   );
 
   const openRepay = () => {
@@ -123,7 +123,7 @@ export default function Dashboard() {
         >
           {loans.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.name} · {formatBDT(l.remaining)} remaining
+              {l.lender_name} · {formatBDT(l.outstanding_balance)} remaining
             </option>
           ))}
         </select>
@@ -136,7 +136,7 @@ export default function Dashboard() {
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

@@ -73,8 +73,10 @@ async function start() {
   app.use('/api/dps', require('./routes/dps'));
   app.use('/api/budgets', require('./routes/budgets'));
   app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
+  app.use('/api/recurring-rules', require('./routes/recurringRules'));
   app.use('/api/fixed-deposits', require('./routes/fixedDeposits'));
   app.use('/api/income-sources', require('./routes/incomeSources'));
+  app.use('/api/incomes', require('./routes/incomes'));
   app.use('/api/investments', require('./routes/investments'));
   app.use('/api/insurance', require('./routes/insurance'));
   app.use('/api/sanchayapatra', require('./routes/sanchayapatra'));
@@ -96,6 +98,14 @@ async function start() {
   app.use('/api/credit-card-payments', require('./routes/creditCardPayments'));
   app.use('/api/dps-payments', require('./routes/dpsPayments'));
   app.use('/api/pf-contributions', require('./routes/pfContributions'));
+  app.use('/api/tags', require('./routes/tags'));
+  app.use('/api/categories', require('./routes/categories'));
+  app.use('/api/attachments', require('./routes/attachments'));
+
+  // Serve uploaded files
+  const uploadsDir = path.resolve(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use('/uploads', express.static(uploadsDir));
 
   // Serve the built client when present (single-process deploy, e.g. Replit/Fly).
   const clientDist = path.resolve(__dirname, '../client/dist');

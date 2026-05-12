@@ -50,9 +50,9 @@ export default function CreditCards() {
 
   const openEdit = (card) => {
     setEditingId(card.id);
-    setNewName(card.name);
-    setNewLimit(String(card.limit_amt));
-    setNewDueDate(card.due_date || '');
+    setNewName(card.card_name);
+    setNewLimit(String(card.credit_limit));
+    setNewDueDate(card.payment_due_day || '');
     setAddOpen(true);
   };
 
@@ -65,16 +65,16 @@ export default function CreditCards() {
     try {
       if (editingId) {
         await api.put(`${apiPaths.creditCards}/${editingId}`, {
-          name: newName.trim(),
-          limit_amt: Number(newLimit),
-          due_date: newDueDate || null,
+          card_name: newName.trim(),
+          credit_limit: Number(newLimit),
+          payment_due_day: newDueDate ? Number(newDueDate) : null,
         });
         toast.push('Credit card updated', 'success');
       } else {
         await api.post(apiPaths.creditCards, {
-          name: newName.trim(),
-          limit_amt: Number(newLimit),
-          due_date: newDueDate || null,
+          card_name: newName.trim(),
+          credit_limit: Number(newLimit),
+          payment_due_day: newDueDate ? Number(newDueDate) : null,
         });
         toast.push('Credit card added', 'success');
       }
@@ -100,7 +100,7 @@ export default function CreditCards() {
 
   const openPay = (card) => {
     setPayCardId(card.id);
-    setPayAmount(String(card.due_amount));
+    setPayAmount(String(card.current_outstanding));
     setPayAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
     setPayOpen(true);
   };
@@ -134,21 +134,19 @@ export default function CreditCards() {
           <div className="card p-6 text-center text-sm text-text-muted">No credit cards on file.</div>
         ) : null}
         {creditCards.map((c) => {
-          const days = daysUntil(c.due_date);
-          const overdueSoon = days !== null && days <= 7;
-          const pct = c.limit_amt > 0 ? (Number(c.due_amount) / Number(c.limit_amt)) * 100 : 0;
+          const pct = c.credit_limit > 0 ? (Number(c.current_outstanding) / Number(c.credit_limit)) * 100 : 0;
           return (
             <div key={c.id} className="space-y-2">
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="font-semibold">{c.name}</div>
+                  <div className="font-semibold">{c.card_name}</div>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => openPay(c)}
                       className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
                       style={{ color: 'var(--positive)' }}
-                      disabled={c.due_amount <= 0}
+                      disabled={c.current_outstanding <= 0}
                     >
                       <CreditCard size={16} />
                     </button>
@@ -171,21 +169,18 @@ export default function CreditCards() {
                   </div>
                 </div>
                 <div className="text-xs text-text-muted mb-2">
-                  {c.due_date ? `Due ${c.due_date}` : ''}
+                  {c.payment_due_day ? `Due day: ${c.payment_due_day}` : ''}
                 </div>
                 <div className="mt-8 font-mono text-lg tracking-widest">{maskedNumber(c.id)}</div>
                 <div className="mt-4 flex items-end justify-between">
                   <div>
-                    <div className="text-[10px] uppercase opacity-70">Due amount</div>
-                    <div className="font-mono text-base">{formatBDT(c.due_amount)}</div>
+                    <div className="text-[10px] uppercase opacity-70">Outstanding</div>
+                    <div className="font-mono text-base">{formatBDT(c.current_outstanding)}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] uppercase opacity-70">Due date</div>
-                    <div
-                      className="font-mono text-sm"
-                      style={{ color: overdueSoon ? 'var(--warning)' : '#fff' }}
-                    >
-                      {c.due_date || '—'} {days !== null ? `(${days}d)` : ''}
+                    <div className="text-[10px] uppercase opacity-70">Due day</div>
+                    <div className="font-mono text-sm">
+                      {c.payment_due_day || '—'}
                     </div>
                   </div>
                 </div>
@@ -194,12 +189,12 @@ export default function CreditCards() {
                 <div className="flex justify-between text-[11px] text-text-muted mb-1">
                   <span>Utilisation</span>
                   <span className="font-mono">
-                    {formatBDT(c.due_amount)} / {formatBDT(c.limit_amt)}
+                    {formatBDT(c.current_outstanding)} / {formatBDT(c.credit_limit)}
                   </span>
                 </div>
                 <ProgressBar
-                  value={Number(c.due_amount)}
-                  max={Number(c.limit_amt)}
+                  value={Number(c.current_outstanding)}
+                  max={Number(c.credit_limit)}
                   color={pct > 80 ? 'var(--negative)' : pct > 50 ? 'var(--warning)' : 'var(--accent)'}
                 />
               </div>
@@ -269,7 +264,7 @@ export default function CreditCards() {
           <option value="">No account (just clear debt)</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

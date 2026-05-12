@@ -195,8 +195,9 @@ export default function Transactions() {
     const needle = search.toLowerCase();
     return items.filter(
       (t) =>
-        (t.description || '').toLowerCase().includes(needle) ||
-        (t.category || '').toLowerCase().includes(needle) ||
+        (t.payee || '').toLowerCase().includes(needle) ||
+        (t.notes || '').toLowerCase().includes(needle) ||
+        (t.category_id || '').toLowerCase().includes(needle) ||
         (t.account_name || '').toLowerCase().includes(needle),
     );
   }, [items, search]);

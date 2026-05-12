@@ -19,7 +19,7 @@ router.post('/debt-repayment', requireAuth, async (req, res, next) => {
     await conn.beginTransaction();
 
     const [[account]] = await conn.query(
-      'SELECT id, name, balance FROM accounts WHERE id = ? AND user_id = ? FOR UPDATE',
+      'SELECT id, name, current_balance FROM accounts WHERE id = ? AND user_id = ? FOR UPDATE',
       [accountId, userId],
     );
     if (!account) {
@@ -28,7 +28,7 @@ router.post('/debt-repayment', requireAuth, async (req, res, next) => {
     }
 
     const [[loan]] = await conn.query(
-      'SELECT id, name, remaining FROM loans WHERE id = ? AND user_id = ? FOR UPDATE',
+      'SELECT id, lender_name, outstanding_balance FROM loans WHERE id = ? AND user_id = ? FOR UPDATE',
       [loanId, userId],
     );
     if (!loan) {
@@ -36,27 +36,27 @@ router.post('/debt-repayment', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Loan not found' });
     }
 
-    if (Number(account.balance) < amt) {
+    if (Number(account.current_balance) < amt) {
       await conn.rollback();
       return res.status(400).json({ error: 'Insufficient account balance' });
     }
-    if (Number(loan.remaining) < amt) {
+    if (Number(loan.outstanding_balance) < amt) {
       await conn.rollback();
       return res.status(400).json({ error: 'Amount exceeds outstanding loan balance' });
     }
 
     await conn.query(
-      'UPDATE accounts SET balance = balance - ? WHERE id = ? AND user_id = ?',
+      'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
       [amt, account.id, userId],
     );
     await conn.query(
-      'UPDATE loans SET remaining = remaining - ? WHERE id = ? AND user_id = ?',
+      'UPDATE loans SET outstanding_balance = outstanding_balance - ? WHERE id = ? AND user_id = ?',
       [amt, loan.id, userId],
     );
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id)
-       VALUES (?, ?, 'debit', ?, 'Loan', ?, 'loan_repayment', ?)`,
-      [userId, account.id, amt, `Loan repayment - ${loan.name}`, loan.id],
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+       VALUES (?, ?, 'expense', ?, 'BDT', CURDATE(), 'Loan', 'account', ?, ?, ?)`,
+      [userId, account.id, amt, loan.id, loan.lender_name, `Loan repayment - ${loan.lender_name}`],
     );
 
     await conn.commit();
@@ -92,12 +92,12 @@ router.get('/export/:entity', requireAuth, async (req, res, next) => {
         filename = 'transactions.csv';
         headers = ['ID', 'Date', 'Type', 'Amount', 'Category', 'Description', 'Account'];
         if (start_date) {
-          query += ' AND t.created_at >= ?';
+          query += ' AND t.transaction_date >= ?';
         }
         if (end_date) {
-          query += ' AND t.created_at <= ?';
+          query += ' AND t.transaction_date <= ?';
         }
-        query += ' ORDER BY t.created_at DESC';
+        query += ' ORDER BY t.transaction_date DESC';
         break;
       case 'accounts':
         query = 'SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at DESC';

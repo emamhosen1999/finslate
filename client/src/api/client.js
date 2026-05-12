@@ -30,8 +30,10 @@ export const apiPaths = {
   dps: '/api/dps',
   budgets: '/api/budgets',
   recurringTransactions: '/api/recurring-transactions',
+  recurringRules: '/api/recurring-rules',
   fixedDeposits: '/api/fixed-deposits',
   incomeSources: '/api/income-sources',
+  incomes: '/api/incomes',
   investments: '/api/investments',
   insurance: '/api/insurance',
   sanchayapatra: '/api/sanchayapatra',
@@ -48,6 +50,9 @@ export const apiPaths = {
   analytics: '/api/analytics',
   summary: '/api/dashboard/summary',
   debtRepayment: '/api/actions/debt-repayment',
+  tags: '/api/tags',
+  categories: '/api/categories',
+  attachments: '/api/attachments',
 };
 
 export default api;

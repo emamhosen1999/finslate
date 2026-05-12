@@ -26,12 +26,12 @@ router.post('/generate', requireAuth, async (req, res, next) => {
       case 'income_expense':
         const [incomeExpenseResult] = await pool.query(
           `SELECT 
-            DATE_FORMAT(date, '%Y-%m') as month,
-            SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) as income,
-            SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as expense
+            DATE_FORMAT(transaction_date, '%Y-%m') as month,
+            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
            FROM transactions 
-           WHERE user_id = ? 
-           GROUP BY DATE_FORMAT(date, '%Y-%m') 
+           WHERE user_id = ? AND deleted_at IS NULL
+           GROUP BY DATE_FORMAT(transaction_date, '%Y-%m') 
            ORDER BY month DESC 
            LIMIT 12`,
           [req.user.id]
@@ -41,10 +41,10 @@ router.post('/generate', requireAuth, async (req, res, next) => {
         
       case 'category_breakdown':
         const [categoryResult] = await pool.query(
-          `SELECT category, SUM(amount) as total, COUNT(*) as count
+          `SELECT category_id, SUM(amount) as total, COUNT(*) as count
            FROM transactions 
-           WHERE user_id = ? AND type = 'debit'
-           GROUP BY category 
+           WHERE user_id = ? AND type = 'expense' AND deleted_at IS NULL
+           GROUP BY category_id 
            ORDER BY total DESC`,
           [req.user.id]
         );
@@ -70,15 +70,16 @@ router.post('/generate', requireAuth, async (req, res, next) => {
       case 'investment_summary':
         const [investmentResult] = await pool.query(
           `SELECT 
-            name,
+            symbol,
             type,
-            quantity,
-            purchase_price,
+            quantity_held,
+            average_buy_price,
             current_price,
-            (quantity * current_price) as current_value,
-            (quantity * current_price - quantity * purchase_price) as gain_loss
+            total_invested,
+            (quantity_held * current_price) as current_value,
+            (quantity_held * current_price - total_invested) as gain_loss
            FROM investments 
-           WHERE user_id = ? 
+           WHERE user_id = ? AND status = 'active'
            ORDER BY current_value DESC`,
           [req.user.id]
         );
@@ -89,8 +90,8 @@ router.post('/generate', requireAuth, async (req, res, next) => {
         const [debtResult] = await pool.query(
           `SELECT 
             'Credit Cards' as type,
-            COALESCE(SUM(outstanding_balance), 0) as amount
-           FROM credit_cards WHERE user_id = ?
+            COALESCE(SUM(current_outstanding), 0) as amount
+           FROM credit_cards WHERE user_id = ? AND is_active = 1
            UNION ALL
            SELECT 
             'Loans' as type,

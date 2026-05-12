@@ -8,7 +8,7 @@ passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, google_id, name, email, avatar_url, created_at FROM users WHERE id = ?',
+      'SELECT id, google_id, name, email, profile_photo_url, created_at FROM users WHERE id = ?',
       [id],
     );
     done(null, rows[0] || null);
@@ -44,14 +44,14 @@ function configureGoogleStrategy() {
           if (existing.length) {
             // Refresh denormalised fields cheaply.
             await pool.query(
-              'UPDATE users SET name = ?, email = ?, avatar_url = ? WHERE id = ?',
+              'UPDATE users SET name = ?, email = ?, profile_photo_url = ? WHERE id = ?',
               [name || null, email, avatarUrl || null, existing[0].id],
             );
             return done(null, { id: existing[0].id });
           }
 
           const [insert] = await pool.query(
-            'INSERT INTO users (google_id, name, email, avatar_url) VALUES (?, ?, ?, ?)',
+            'INSERT INTO users (google_id, name, email, profile_photo_url) VALUES (?, ?, ?, ?)',
             [googleId, name || null, email, avatarUrl || null],
           );
           const newUserId = insert.insertId;

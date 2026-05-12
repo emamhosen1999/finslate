@@ -20,7 +20,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.get('/:id/contributions', requireAuth, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      'SELECT * FROM goal_contributions WHERE goal_id = ? ORDER BY contribution_date DESC',
+      'SELECT * FROM goal_contributions WHERE goal_id = ? ORDER BY date DESC',
       [req.params.id]
     );
     res.json(rows);
@@ -32,12 +32,12 @@ router.get('/:id/contributions', requireAuth, async (req, res, next) => {
 // Create a new goal
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { name, category, target_amount, target_date, notes } = req.body;
+    const { name, category, target_amount, target_date, description } = req.body;
 
     const [result] = await pool.query(
-      `INSERT INTO goals (user_id, name, category, target_amount, current_amount, target_date, status, notes)
-       VALUES (?, ?, ?, ?, 0, ?, 'active', ?)`,
-      [req.user.id, name, category, target_amount, target_date, notes]
+      `INSERT INTO goals (user_id, name, category, target_amount, current_amount, target_date, status, description)
+       VALUES (?, ?, ?, ?, 0, ?, 'in_progress', ?)`,
+      [req.user.id, name, category, target_amount, target_date, description || null]
     );
 
     res.json({ id: result.insertId });
@@ -49,12 +49,16 @@ router.post('/', requireAuth, async (req, res, next) => {
 // Update goal
 router.put('/:id', requireAuth, async (req, res, next) => {
   try {
-    const { name, category, target_amount, current_amount, target_date, status, notes } = req.body;
+    const { name, category, target_amount, current_amount, target_date, status, description } = req.body;
 
+    const validStatus = ['in_progress','achieved','paused','abandoned'];
+    const safeStatus = validStatus.includes(status) ? status : undefined;
     await pool.query(
-      `UPDATE goals SET name = ?, category = ?, target_amount = ?, current_amount = ?, target_date = ?, status = ?, notes = ?
+      `UPDATE goals SET name = ?, category = ?, target_amount = ?, current_amount = ?, target_date = ?, ${safeStatus ? 'status = ?,' : ''} description = ?
        WHERE id = ? AND user_id = ?`,
-      [name, category, target_amount, current_amount, target_date, status, notes, req.params.id, req.user.id]
+      safeStatus
+        ? [name, category, target_amount, current_amount, target_date, safeStatus, description || null, req.params.id, req.user.id]
+        : [name, category, target_amount, current_amount, target_date, description || null, req.params.id, req.user.id]
     );
 
     res.json({ ok: true });
@@ -79,7 +83,7 @@ router.post('/:id/contribution', requireAuth, async (req, res, next) => {
   try {
     await conn.beginTransaction();
 
-    const { amount, contribution_date, notes } = req.body;
+    const { amount, date, source_account_id, note } = req.body;
 
     // Get goal details
     const [goals] = await conn.query(
@@ -93,31 +97,24 @@ router.post('/:id/contribution', requireAuth, async (req, res, next) => {
     }
 
     const goal = goals[0];
-    const newAmount = parseFloat(goal.current_amount) + parseFloat(amount);
+    const newAmount = Math.round((parseFloat(goal.current_amount) + parseFloat(amount)) * 100) / 100;
 
     // Record contribution
     await conn.query(
-      `INSERT INTO goal_contributions (goal_id, amount, contribution_date, notes)
-       VALUES (?, ?, ?, ?)`,
-      [req.params.id, amount, contribution_date, notes]
+      `INSERT INTO goal_contributions (goal_id, amount, date, source_account_id, note)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, amount, date || new Date().toISOString().slice(0, 10), source_account_id || null, note || null]
     );
 
     // Update goal current amount
+    const achieved = newAmount >= parseFloat(goal.target_amount);
     await conn.query(
-      'UPDATE goals SET current_amount = ? WHERE id = ?',
-      [newAmount, req.params.id]
+      'UPDATE goals SET current_amount = ?, status = IF(? = 1, \'achieved\', status) WHERE id = ?',
+      [newAmount, achieved ? 1 : 0, req.params.id]
     );
 
-    // Check if goal is completed
-    if (newAmount >= parseFloat(goal.target_amount)) {
-      await conn.query(
-        'UPDATE goals SET status = ? WHERE id = ?',
-        ['completed', req.params.id]
-      );
-    }
-
     await conn.commit();
-    res.json({ current_amount: newAmount, status: newAmount >= parseFloat(goal.target_amount) ? 'completed' : goal.status });
+    res.json({ current_amount: newAmount, status: achieved ? 'achieved' : goal.status });
   } catch (err) {
     await conn.rollback();
     next(err);
@@ -167,7 +164,7 @@ router.get('/:id/progress', requireAuth, async (req, res, next) => {
 
     // Get contribution history
     const [contributions] = await pool.query(
-      'SELECT * FROM goal_contributions WHERE goal_id = ? ORDER BY contribution_date DESC LIMIT 10',
+      'SELECT * FROM goal_contributions WHERE goal_id = ? ORDER BY date DESC LIMIT 10',
       [goalId]
     );
 
@@ -222,15 +219,15 @@ router.get('/summary/all', requireAuth, async (req, res, next) => {
 
     const totalTarget = goals.reduce((sum, g) => sum + Number(g.target_amount), 0);
     const totalCurrent = goals.reduce((sum, g) => sum + Number(g.current_amount), 0);
-    const completedGoals = goals.filter(g => Number(g.current_amount) >= Number(g.target_amount)).length;
+    const achievedGoals = goals.filter(g => g.status === 'achieved').length;
 
     res.json({
       total_goals: goals.length,
-      completed_goals: completedGoals,
-      active_goals: goals.length - completedGoals,
+      achieved_goals: achievedGoals,
+      active_goals: goals.length - achievedGoals,
       total_target_amount: totalTarget,
       total_current_amount: totalCurrent,
-      overall_progress: totalTarget > 0 ? ((totalCurrent / totalTarget) * 100).toFixed(2) : 0,
+      overall_progress_pct: totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 10000) / 100 : 0,
       goals: summary
     });
   } catch (err) {

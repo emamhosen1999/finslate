@@ -29,17 +29,17 @@ export default function PersonalLending() {
   const [formData, setFormData] = useState({
     direction: 'lent',
     counterparty_name: '',
-    counterparty_contact: '',
-    principal_amount: '',
-    interest_rate: '',
-    start_date: new Date().toISOString().split('T')[0],
-    due_date: '',
-    notes: '',
+    counterparty_phone: '',
+    principal: '',
+    annual_interest_rate: '',
+    given_date: new Date().toISOString().split('T')[0],
+    expected_return_date: '',
+    note: '',
   });
   const [repaymentData, setRepaymentData] = useState({
     repayment_date: new Date().toISOString().split('T')[0],
     amount: '',
-    notes: '',
+    note: '',
   });
 
   const loadLendings = async () => {
@@ -63,12 +63,12 @@ export default function PersonalLending() {
     setFormData({
       direction: 'lent',
       counterparty_name: '',
-      counterparty_contact: '',
-      principal_amount: '',
-      interest_rate: '',
-      start_date: new Date().toISOString().split('T')[0],
-      due_date: '',
-      notes: '',
+      counterparty_phone: '',
+      principal: '',
+      annual_interest_rate: '',
+      given_date: new Date().toISOString().split('T')[0],
+      expected_return_date: '',
+      note: '',
     });
     setAddOpen(true);
   };
@@ -78,12 +78,12 @@ export default function PersonalLending() {
     setFormData({
       direction: l.direction,
       counterparty_name: l.counterparty_name,
-      counterparty_contact: l.counterparty_contact,
-      principal_amount: l.principal_amount,
-      interest_rate: l.interest_rate,
-      start_date: l.start_date,
-      due_date: l.due_date,
-      notes: l.notes,
+      counterparty_phone: l.counterparty_phone,
+      principal: l.principal,
+      annual_interest_rate: l.annual_interest_rate,
+      given_date: l.given_date,
+      expected_return_date: l.expected_return_date,
+      note: l.note,
     });
     setAddOpen(true);
   };
@@ -93,13 +93,13 @@ export default function PersonalLending() {
     setRepaymentData({
       repayment_date: new Date().toISOString().split('T')[0],
       amount: '',
-      notes: '',
+      note: '',
     });
     setRepaymentOpen(true);
   };
 
   const handleSubmit = async () => {
-    if (!formData.direction || !formData.counterparty_name || !formData.principal_amount || !formData.start_date) {
+    if (!formData.direction || !formData.counterparty_name || !formData.principal || !formData.given_date) {
       toast.push('Required fields missing', 'error');
       return;
     }
@@ -216,32 +216,32 @@ export default function PersonalLending() {
                     </div>
                   </div>
                   <div className="text-[11px] text-text-muted mb-2">
-                    {isLent ? 'Lent to' : 'Borrowed from'} · {l.counterparty_contact || 'No contact'}
+                    {isLent ? 'Lent to' : 'Borrowed from'} · {l.counterparty_phone || 'No contact'}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <div className="text-text-muted">Principal</div>
-                      <div className="font-mono">{formatBDT(l.principal_amount)}</div>
+                      <div className="font-mono">{formatBDT(l.principal)}</div>
                     </div>
                     <div>
                       <div className="text-text-muted">Outstanding</div>
                       <div className="font-mono font-semibold">{formatBDT(l.outstanding_balance)}</div>
                     </div>
                     <div>
-                      <div className="text-text-muted">Start Date</div>
-                      <div>{fmtDate(l.start_date)}</div>
+                      <div className="text-text-muted">Given Date</div>
+                      <div>{fmtDate(l.given_date)}</div>
                     </div>
                     <div>
-                      <div className="text-text-muted">Due Date</div>
-                      <div>{fmtDate(l.due_date)}</div>
+                      <div className="text-text-muted">Return Date</div>
+                      <div>{fmtDate(l.expected_return_date)}</div>
                     </div>
                   </div>
                   <div className="mt-2">
                     <span
                       className="text-[10px] uppercase rounded-full px-2 py-[2px]"
                       style={{
-                        background: l.status === 'active' ? 'var(--accent-soft)' : l.status === 'settled' ? 'var(--positive-soft)' : 'var(--bg-elevated)',
-                        color: l.status === 'active' ? 'var(--accent)' : l.status === 'settled' ? 'var(--positive)' : 'var(--text-muted)',
+                        background: l.status === 'outstanding' ? 'var(--accent-soft)' : l.status === 'settled' ? 'var(--positive-soft)' : 'var(--bg-elevated)',
+                        color: l.status === 'outstanding' ? 'var(--accent)' : l.status === 'settled' ? 'var(--positive)' : 'var(--text-muted)',
                       }}
                     >
                       {l.status}
@@ -281,8 +281,8 @@ export default function PersonalLending() {
           className="input mb-3"
           type="text"
           placeholder="e.g. 01712345678"
-          value={formData.counterparty_contact}
-          onChange={(e) => setFormData({ ...formData, counterparty_contact: e.target.value })}
+          value={formData.counterparty_phone}
+          onChange={(e) => setFormData({ ...formData, counterparty_phone: e.target.value })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Principal Amount (BDT)</label>
@@ -291,8 +291,8 @@ export default function PersonalLending() {
           type="text"
           inputMode="numeric"
           placeholder="e.g. 50000"
-          value={formData.principal_amount}
-          onChange={(e) => setFormData({ ...formData, principal_amount: e.target.value.replace(/[^\d]/g, '') })}
+          value={formData.principal}
+          onChange={(e) => setFormData({ ...formData, principal: e.target.value.replace(/[^\d]/g, '') })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Interest Rate % (optional)</label>
@@ -301,24 +301,24 @@ export default function PersonalLending() {
           type="text"
           inputMode="numeric"
           placeholder="e.g. 5"
-          value={formData.interest_rate}
-          onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value.replace(/[^\d.]/g, '') })}
+          value={formData.annual_interest_rate}
+          onChange={(e) => setFormData({ ...formData, annual_interest_rate: e.target.value.replace(/[^\d.]/g, '') })}
         />
 
-        <label className="block text-xs text-text-muted mb-1">Start Date</label>
+        <label className="block text-xs text-text-muted mb-1">Given Date</label>
         <input
           className="input mb-3"
           type="date"
-          value={formData.start_date}
-          onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+          value={formData.given_date}
+          onChange={(e) => setFormData({ ...formData, given_date: e.target.value })}
         />
 
-        <label className="block text-xs text-text-muted mb-1">Due Date (optional)</label>
+        <label className="block text-xs text-text-muted mb-1">Expected Return Date (optional)</label>
         <input
           className="input mb-3"
           type="date"
-          value={formData.due_date}
-          onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+          value={formData.expected_return_date}
+          onChange={(e) => setFormData({ ...formData, expected_return_date: e.target.value })}
         />
 
         <label className="block text-xs text-text-muted mb-1">Notes (optional)</label>
@@ -326,8 +326,8 @@ export default function PersonalLending() {
           className="input mb-4"
           rows={2}
           placeholder="Any additional notes..."
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          value={formData.note}
+          onChange={(e) => setFormData({ ...formData, note: e.target.value })}
         />
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleSubmit}>
@@ -364,8 +364,8 @@ export default function PersonalLending() {
           className="input mb-4"
           rows={2}
           placeholder="Any notes..."
-          value={repaymentData.notes}
-          onChange={(e) => setRepaymentData({ ...repaymentData, notes: e.target.value })}
+          value={repaymentData.note}
+          onChange={(e) => setRepaymentData({ ...repaymentData, note: e.target.value })}
         />
 
         <ActionButton variant="primary" className="w-full" loading={repaymentLoading} onClick={handleRepayment}>

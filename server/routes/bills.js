@@ -86,18 +86,21 @@ router.post('/:id/pay', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Bill already paid' });
     }
 
+    const payAccountId = account_id || bill.account_id;
+    const payDate = payment_date || new Date().toISOString().slice(0, 10);
+
     // Create transaction
     await conn.query(
-      `INSERT INTO transactions (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
-       VALUES (?, ?, 'debit', ?, 'Bill', ?, 'bill', ?, ?)`,
-      [req.user.id, account_id || bill.account_id, bill.amount, bill.name, req.params.id, payment_date]
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, source_id, payee, notes)
+       VALUES (?, ?, 'expense', ?, 'BDT', ?, 'Bill', 'account', ?, ?, ?)`,
+      [req.user.id, payAccountId, bill.amount, payDate, req.params.id, bill.provider || bill.name, bill.name]
     );
 
     // Update account balance
-    if (account_id || bill.account_id) {
+    if (payAccountId) {
       await conn.query(
-        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
-        [bill.amount, account_id || bill.account_id]
+        'UPDATE accounts SET current_balance = current_balance - ? WHERE id = ? AND user_id = ?',
+        [bill.amount, payAccountId, req.user.id]
       );
     }
 

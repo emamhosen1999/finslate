@@ -1,14 +1,8 @@
 const pool = require('../db/connection');
 
-function daysAgo(n) {
+function dateStr(offsetDays = 0) {
   const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 19).replace('T', ' ');
-}
-
-function plusDays(n) {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
+  d.setDate(d.getDate() + offsetDays);
   return d.toISOString().slice(0, 10);
 }
 
@@ -23,73 +17,77 @@ async function seedNewUser(userId) {
   try {
     await conn.beginTransaction();
 
-    // Accounts
+    // ── Accounts ─────────────────────────────────────────────────────────────
     const [accountsResult] = await conn.query(
-      `INSERT INTO accounts (user_id, name, type, balance) VALUES ?`,
+      `INSERT INTO accounts (user_id, name, type, current_balance, opening_balance, currency) VALUES ?`,
       [[
-        [userId, 'DBBL Savings', 'bank', 45000.0],
-        [userId, 'bKash', 'mobile_banking', 8500.0],
-        [userId, 'Cash', 'cash', 3200.0],
+        [userId, 'DBBL Savings',  'bank',           45000.00, 45000.00, 'BDT'],
+        [userId, 'bKash',         'mobile_banking',  8500.00,  8500.00, 'BDT'],
+        [userId, 'Cash',          'cash',             3200.00,  3200.00, 'BDT'],
       ]],
     );
     const firstAccountId = accountsResult.insertId;
-    const dbblId = firstAccountId; // first row
+    const dbblId  = firstAccountId;
     const bkashId = firstAccountId + 1;
-    const cashId = firstAccountId + 2;
+    const cashId  = firstAccountId + 2;
 
-    // Credit cards
+    // ── Credit cards ─────────────────────────────────────────────────────────
     await conn.query(
-      `INSERT INTO credit_cards (user_id, name, limit_amt, due_amount, due_date) VALUES ?`,
+      `INSERT INTO credit_cards
+        (user_id, issuer, card_name, card_type, credit_limit, current_outstanding, billing_cycle_day, payment_due_day, annual_interest_rate)
+       VALUES ?`,
       [[
-        [userId, 'BRAC Visa Gold', 100000.0, 18750.0, plusDays(15)],
-        [userId, 'City Bank Amex', 50000.0, 6200.0, plusDays(20)],
+        [userId, 'BRAC Bank',  'BRAC Visa Gold',    'visa',       100000.00, 18750.00, 1,  15, 24.00],
+        [userId, 'City Bank',  'City Bank Amex',    'amex',        50000.00,  6200.00, 1,  20, 22.00],
       ]],
     );
 
-    // Loan
+    // ── Loans ─────────────────────────────────────────────────────────────────
     const [loanRes] = await conn.query(
-      `INSERT INTO loans (user_id, name, principal, remaining, monthly_emi, interest_rate)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, 'Home Loan', 200000.0, 200000.0, 8500.0, 9.5],
+      `INSERT INTO loans
+        (user_id, lender_name, loan_type, principal_amount, outstanding_balance, annual_interest_rate, interest_type, tenure_months, emi_amount, disbursement_date, first_emi_date, repayment_account_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, 'DBBL', 'home', 2000000.00, 1850000.00, 9.50, 'reducing_balance', 240, 18500.00, plusYears(-1), dateStr(1), dbblId],
     );
     const loanId = loanRes.insertId;
 
-    // DPS
+    // ── DPS ───────────────────────────────────────────────────────────────────
     const [dpsRes] = await conn.query(
-      `INSERT INTO dps (user_id, name, monthly_amount, total_deposited, maturity_amount, start_date, maturity_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [userId, 'Islami Bank DPS', 5000.0, 15000.0, 180000.0, plusYears(-1).slice(0, 10), plusYears(2)],
+      `INSERT INTO dps
+        (user_id, institution_name, dps_account_number, linked_account_id, installment_amount, annual_interest_rate, tenure_months, start_date, maturity_date, total_deposited, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, 'Islami Bank', 'DPS-2023-001', bkashId, 5000.00, 12.00, 60, plusYears(-1), plusYears(4), 60000.00, 'active'],
     );
     const dpsId = dpsRes.insertId;
 
-    // 20 realistic transactions over the last ~30 days.
-    // Tuples: [user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at]
+    // ── Transactions (20 realistic entries) ───────────────────────────────────
+    // Columns: user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes, ref_type, ref_id
     const tx = [
-      [userId, dbblId,  'credit', 80000.0, 'Salary',     'Monthly salary credit',       'salary',         null,   daysAgo(28)],
-      [userId, dbblId,  'debit',   5000.0, 'Savings',    'DPS installment - Islami Bank','dps',            dpsId,  daysAgo(28)],
-      [userId, dbblId,  'debit',   8500.0, 'Loan',       'Home Loan EMI',                'loan_repayment', loanId, daysAgo(28)],
-      [userId, bkashId, 'debit',   1850.0, 'Food',       'Grocery - Shwapno',            'expense',        null,   daysAgo(26)],
-      [userId, bkashId, 'debit',    320.0, 'Transport',  'Pathao ride',                  'expense',        null,   daysAgo(25)],
-      [userId, dbblId,  'debit',   2400.0, 'Utilities',  'DESCO electricity bill',       'expense',        null,   daysAgo(24)],
-      [userId, bkashId, 'debit',    750.0, 'Food',       'Dinner at Sultans',            'expense',        null,   daysAgo(23)],
-      [userId, bkashId, 'debit',    300.0, 'Transport',  'Uber to office',               'expense',        null,   daysAgo(22)],
-      [userId, dbblId,  'debit',   3500.0, 'Shopping',   'Daraz - Headphones',           'expense',        null,   daysAgo(21)],
-      [userId, cashId,  'debit',    220.0, 'Food',       'Tea & snacks',                 'expense',        null,   daysAgo(20)],
-      [userId, bkashId, 'debit',    549.0, 'Utilities',  'Mobile recharge - GP',         'expense',        null,   daysAgo(18)],
-      [userId, bkashId, 'debit',   1200.0, 'Health',     'Pharmacy - Lazz',              'expense',        null,   daysAgo(17)],
-      [userId, dbblId,  'debit',   4500.0, 'Shopping',   'Aarong - Clothing',            'expense',        null,   daysAgo(15)],
-      [userId, cashId,  'debit',    150.0, 'Transport',  'CNG to home',                  'expense',        null,   daysAgo(14)],
-      [userId, dbblId,  'debit',   5000.0, 'Others',     'ATM withdrawal',               'expense',        null,   daysAgo(12)],
-      [userId, bkashId, 'debit',    980.0, 'Food',       'Pizza Hut',                    'expense',        null,   daysAgo(10)],
-      [userId, bkashId, 'debit',    650.0, 'Transport',  'Pathao bike',                  'expense',        null,   daysAgo(8)],
-      [userId, dbblId,  'debit',   1800.0, 'Utilities',  'Internet bill - Link3',        'expense',        null,   daysAgo(6)],
-      [userId, bkashId, 'debit',    420.0, 'Food',       'Coffee - North End',           'expense',        null,   daysAgo(4)],
-      [userId, dbblId,  'debit',   2750.0, 'Shopping',   'Online - Pickaboo',            'expense',        null,   daysAgo(2)],
+      [userId, dbblId,  'income',   80000.00, 'BDT', dateStr(-28), 'Salary',    'account', 'DBBL Salary',       'Monthly salary credit',        'salary',         null  ],
+      [userId, dbblId,  'expense',   5000.00, 'BDT', dateStr(-28), 'Savings',   'account', 'Islami Bank',       'DPS installment',              'dps',            dpsId ],
+      [userId, dbblId,  'expense',  18500.00, 'BDT', dateStr(-28), 'Loan',      'account', 'DBBL Home Loan',    'Home Loan EMI',                'loan_repayment', loanId],
+      [userId, bkashId, 'expense',   1850.00, 'BDT', dateStr(-26), 'Food',      'account', 'Shwapno',           'Grocery shopping',             'expense',        null  ],
+      [userId, bkashId, 'expense',    320.00, 'BDT', dateStr(-25), 'Transport', 'account', 'Pathao',            'Pathao ride',                  'expense',        null  ],
+      [userId, dbblId,  'expense',   2400.00, 'BDT', dateStr(-24), 'Utilities', 'account', 'DESCO',             'Electricity bill',             'expense',        null  ],
+      [userId, bkashId, 'expense',    750.00, 'BDT', dateStr(-23), 'Food',      'account', "Sultan's Dine",     'Dinner at Sultans',            'expense',        null  ],
+      [userId, bkashId, 'expense',    300.00, 'BDT', dateStr(-22), 'Transport', 'account', 'Uber',              'Uber to office',               'expense',        null  ],
+      [userId, dbblId,  'expense',   3500.00, 'BDT', dateStr(-21), 'Shopping',  'account', 'Daraz',             'Online - Headphones',          'expense',        null  ],
+      [userId, cashId,  'expense',    220.00, 'BDT', dateStr(-20), 'Food',      'cash',    'Local stall',       'Tea & snacks',                 'expense',        null  ],
+      [userId, bkashId, 'expense',    549.00, 'BDT', dateStr(-18), 'Utilities', 'account', 'Grameenphone',      'Mobile recharge',              'expense',        null  ],
+      [userId, bkashId, 'expense',   1200.00, 'BDT', dateStr(-17), 'Health',    'account', 'Lazz Pharma',       'Pharmacy purchase',            'expense',        null  ],
+      [userId, dbblId,  'expense',   4500.00, 'BDT', dateStr(-15), 'Shopping',  'account', 'Aarong',            'Clothing',                     'expense',        null  ],
+      [userId, cashId,  'expense',    150.00, 'BDT', dateStr(-14), 'Transport', 'cash',    'CNG',               'CNG to home',                  'expense',        null  ],
+      [userId, dbblId,  'expense',   5000.00, 'BDT', dateStr(-12), 'Others',    'account', 'ATM',               'ATM withdrawal',               'expense',        null  ],
+      [userId, bkashId, 'expense',    980.00, 'BDT', dateStr(-10), 'Food',      'account', 'Pizza Hut',         'Pizza Hut',                    'expense',        null  ],
+      [userId, bkashId, 'expense',    650.00, 'BDT', dateStr(-8),  'Transport', 'account', 'Pathao',            'Pathao bike',                  'expense',        null  ],
+      [userId, dbblId,  'expense',   1800.00, 'BDT', dateStr(-6),  'Utilities', 'account', 'Link3 Internet',    'Internet bill',                'expense',        null  ],
+      [userId, bkashId, 'expense',    420.00, 'BDT', dateStr(-4),  'Food',      'account', 'North End Coffee',  'Coffee',                       'expense',        null  ],
+      [userId, dbblId,  'expense',   2750.00, 'BDT', dateStr(-2),  'Shopping',  'account', 'Pickaboo',          'Online shopping',              'expense',        null  ],
     ];
 
     await conn.query(
       `INSERT INTO transactions
-        (user_id, account_id, type, amount, category, description, ref_type, ref_id, created_at)
+        (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, payee, notes, ref_type, ref_id)
        VALUES ?`,
       [tx],
     );

@@ -38,10 +38,10 @@ export default function Loan() {
 
   const openEdit = (loan) => {
     setEditingId(loan.id);
-    setNewName(loan.name);
-    setNewPrincipal(String(loan.principal));
-    setNewEmi(String(loan.monthly_emi));
-    setNewRate(loan.interest_rate || '');
+    setNewName(loan.lender_name);
+    setNewPrincipal(String(loan.principal_amount));
+    setNewEmi(String(loan.emi_amount));
+    setNewRate(loan.annual_interest_rate || '');
     setAddOpen(true);
   };
 
@@ -54,18 +54,18 @@ export default function Loan() {
     try {
       if (editingId) {
         await api.put(`${apiPaths.loans}/${editingId}`, {
-          name: newName.trim(),
-          principal: Number(newPrincipal),
-          monthly_emi: Number(newEmi),
-          interest_rate: newRate || null,
+          lender_name: newName.trim(),
+          principal_amount: Number(newPrincipal),
+          emi_amount: Number(newEmi),
+          annual_interest_rate: newRate || null,
         });
         toast.push('Loan updated', 'success');
       } else {
         await api.post(apiPaths.loans, {
-          name: newName.trim(),
-          principal: Number(newPrincipal),
-          monthly_emi: Number(newEmi),
-          interest_rate: newRate || null,
+          lender_name: newName.trim(),
+          principal_amount: Number(newPrincipal),
+          emi_amount: Number(newEmi),
+          annual_interest_rate: newRate || null,
         });
         toast.push('Loan added', 'success');
       }
@@ -91,7 +91,7 @@ export default function Loan() {
 
   const openPay = (loan) => {
     setPayLoanId(loan.id);
-    setPayAmount(String(loan.monthly_emi));
+    setPayAmount(String(loan.emi_amount));
     setPayAccountId(accounts[0]?.id ? String(accounts[0].id) : '');
     setPayOpen(true);
   };
@@ -125,19 +125,19 @@ export default function Loan() {
           <div className="card p-6 text-center text-sm text-text-muted">No active loans.</div>
         ) : null}
         {loans.map((l) => {
-          const principal = Number(l.principal) || 0;
-          const remaining = Number(l.remaining) || 0;
+          const principal = Number(l.principal_amount) || 0;
+          const remaining = Number(l.outstanding_balance) || 0;
           const repaid = Math.max(0, principal - remaining);
           const pct = principal > 0 ? (repaid / principal) * 100 : 0;
-          const emi = Number(l.monthly_emi) || 0;
+          const emi = Number(l.emi_amount) || 0;
           const monthsToPayoff = emi > 0 ? Math.ceil(remaining / emi) : null;
           return (
             <div key={l.id} className="card p-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="font-semibold">{l.name}</div>
+                <div className="font-semibold">{l.lender_name}</div>
                 <div className="flex items-center gap-2">
                   <div className="text-xs text-text-muted">
-                    {l.interest_rate ? `${Number(l.interest_rate).toFixed(2)}% p.a.` : ''}
+                    {l.annual_interest_rate ? `${Number(l.annual_interest_rate).toFixed(2)}% p.a.` : ''}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -145,7 +145,7 @@ export default function Loan() {
                       onClick={() => openPay(l)}
                       className="p-2 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
                       style={{ color: 'var(--positive)' }}
-                      disabled={l.remaining <= 0}
+                      disabled={l.outstanding_balance <= 0}
                     >
                       <Wallet size={16} />
                     </button>
@@ -275,7 +275,7 @@ export default function Loan() {
           <option value="">No account (just clear debt)</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

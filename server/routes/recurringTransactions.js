@@ -137,14 +137,16 @@ router.post('/:id/process', requireAuth, async (req, res, next) => {
     if (rt.end_date && rt.next_due > rt.end_date) {
       return res.status(400).json({ error: 'Recurring transaction has ended.' });
     }
-    const [result] = await connection.query(
-      'INSERT INTO transactions (user_id, account_id, type, amount, category, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, rt.account_id, rt.type, rt.amount, rt.category, rt.description || rt.name],
+    const txType = rt.type === 'credit' ? 'income' : 'expense';
+    await connection.query(
+      `INSERT INTO transactions (user_id, account_id, type, amount, currency, transaction_date, category_id, source_type, notes)
+       VALUES (?, ?, ?, ?, 'BDT', CURDATE(), ?, 'recurring', ?)`,
+      [req.user.id, rt.account_id, txType, rt.amount, rt.category || null, rt.description || rt.name],
     );
     if (rt.account_id) {
-      const balanceChange = rt.type === 'credit' ? rt.amount : -rt.amount;
+      const balanceChange = txType === 'income' ? rt.amount : -rt.amount;
       await connection.query(
-        'UPDATE accounts SET balance = balance + ? WHERE id = ? AND user_id = ?',
+        'UPDATE accounts SET current_balance = current_balance + ? WHERE id = ? AND user_id = ?',
         [balanceChange, rt.account_id, req.user.id],
       );
     }
