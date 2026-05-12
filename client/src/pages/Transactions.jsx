@@ -23,7 +23,22 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
-  const [newTx, setNewTx] = useState({ account_id: '', type: 'debit', amount: '', category: '', description: '' });
+  const [newTx, setNewTx] = useState({
+    account_id: '',
+    type: 'expense',
+    amount: '',
+    category_id: '',
+    subcategory_id: '',
+    transaction_date: new Date().toISOString().split('T')[0],
+    source_type: 'account',
+    source_id: '',
+    payee: '',
+    notes: '',
+    reference_no: '',
+    is_recurring: false,
+    recurring_rule_id: '',
+    is_split: false,
+  });
   const [editingId, setEditingId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -36,7 +51,22 @@ export default function Transactions() {
 
   const openAdd = () => {
     setEditingId(null);
-    setNewTx({ account_id: accounts[0]?.id ? String(accounts[0].id) : '', type: 'debit', amount: '', category: '', description: '' });
+    setNewTx({
+      account_id: accounts[0]?.id ? String(accounts[0].id) : '',
+      type: 'expense',
+      amount: '',
+      category_id: '',
+      subcategory_id: '',
+      transaction_date: new Date().toISOString().split('T')[0],
+      source_type: 'account',
+      source_id: '',
+      payee: '',
+      notes: '',
+      reference_no: '',
+      is_recurring: false,
+      recurring_rule_id: '',
+      is_split: false,
+    });
     setAddOpen(true);
   };
 
@@ -46,15 +76,24 @@ export default function Transactions() {
       account_id: String(tx.account_id),
       type: tx.type,
       amount: String(tx.amount),
-      category: tx.category,
-      description: tx.description || '',
+      category_id: tx.category_id || '',
+      subcategory_id: tx.subcategory_id || '',
+      transaction_date: tx.transaction_date || new Date().toISOString().split('T')[0],
+      source_type: tx.source_type || '',
+      source_id: tx.source_id || '',
+      payee: tx.payee || '',
+      notes: tx.notes || '',
+      reference_no: tx.reference_no || '',
+      is_recurring: tx.is_recurring || false,
+      recurring_rule_id: tx.recurring_rule_id || '',
+      is_split: tx.is_split || false,
     });
     setAddOpen(true);
   };
 
   const handleAdd = async () => {
-    if (!newTx.account_id || !newTx.type || !newTx.amount || !newTx.category) {
-      toast.push('Account, type, amount, and category are required', 'error');
+    if (!newTx.account_id || !newTx.type || !newTx.amount) {
+      toast.push('Account, type, and amount are required', 'error');
       return;
     }
     setAddLoading(true);
@@ -64,8 +103,17 @@ export default function Transactions() {
           account_id: Number(newTx.account_id),
           type: newTx.type,
           amount: Number(newTx.amount),
-          category: newTx.category,
-          description: newTx.description || null,
+          category_id: newTx.category_id || null,
+          subcategory_id: newTx.subcategory_id || null,
+          transaction_date: newTx.transaction_date,
+          source_type: newTx.source_type || 'account',
+          source_id: newTx.source_id || null,
+          payee: newTx.payee || null,
+          notes: newTx.notes || null,
+          reference_no: newTx.reference_no || null,
+          is_recurring: newTx.is_recurring || false,
+          recurring_rule_id: newTx.recurring_rule_id || null,
+          is_split: newTx.is_split || false,
         });
         toast.push('Transaction updated', 'success');
       } else {
@@ -73,8 +121,17 @@ export default function Transactions() {
           account_id: Number(newTx.account_id),
           type: newTx.type,
           amount: Number(newTx.amount),
-          category: newTx.category,
-          description: newTx.description || null,
+          category_id: newTx.category_id || null,
+          subcategory_id: newTx.subcategory_id || null,
+          transaction_date: newTx.transaction_date,
+          source_type: newTx.source_type || 'account',
+          source_id: newTx.source_id || null,
+          payee: newTx.payee || null,
+          notes: newTx.notes || null,
+          reference_no: newTx.reference_no || null,
+          is_recurring: newTx.is_recurring || false,
+          recurring_rule_id: newTx.recurring_rule_id || null,
+          is_split: newTx.is_split || false,
         });
         toast.push('Transaction added', 'success');
       }
@@ -176,8 +233,11 @@ export default function Transactions() {
             </select>
             <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">All types</option>
-              <option value="credit">Credit</option>
-              <option value="debit">Debit</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+              <option value="transfer_debit">Transfer Debit</option>
+              <option value="transfer_credit">Transfer Credit</option>
+              <option value="adjustment">Adjustment</option>
             </select>
             <select
               className="input"
@@ -225,7 +285,7 @@ export default function Transactions() {
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>
@@ -236,8 +296,11 @@ export default function Transactions() {
           value={newTx.type}
           onChange={(e) => setNewTx({ ...newTx, type: e.target.value })}
         >
-          <option value="debit">Debit (expense)</option>
-          <option value="credit">Credit (income)</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+          <option value="transfer_debit">Transfer Debit</option>
+          <option value="transfer_credit">Transfer Credit</option>
+          <option value="adjustment">Adjustment</option>
         </select>
 
         <label className="block text-xs text-text-muted mb-1">Amount (BDT)</label>
@@ -250,25 +313,72 @@ export default function Transactions() {
           onChange={(e) => setNewTx({ ...newTx, amount: e.target.value.replace(/[^\d]/g, '') })}
         />
 
-        <label className="block text-xs text-text-muted mb-1">Category</label>
+        <label className="block text-xs text-text-muted mb-1">Category (Optional)</label>
         <select
           className="input mb-3"
-          value={newTx.category}
-          onChange={(e) => setNewTx({ ...newTx, category: e.target.value })}
+          value={newTx.category_id}
+          onChange={(e) => setNewTx({ ...newTx, category_id: e.target.value })}
         >
+          <option value="">No category</option>
           {CATEGORIES.filter(c => c).map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
 
-        <label className="block text-xs text-text-muted mb-1">Description (optional)</label>
+        <label className="block text-xs text-text-muted mb-1">Transaction Date</label>
         <input
-          className="input mb-4"
+          className="input mb-3"
+          type="date"
+          value={newTx.transaction_date}
+          onChange={(e) => setNewTx({ ...newTx, transaction_date: e.target.value })}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Payee (Optional)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          placeholder="e.g. Grocery Store"
+          value={newTx.payee}
+          onChange={(e) => setNewTx({ ...newTx, payee: e.target.value })}
+        />
+
+        <label className="block text-xs text-text-muted mb-1">Notes (Optional)</label>
+        <input
+          className="input mb-3"
           type="text"
           placeholder="e.g. Grocery shopping"
-          value={newTx.description}
-          onChange={(e) => setNewTx({ ...newTx, description: e.target.value })}
+          value={newTx.notes}
+          onChange={(e) => setNewTx({ ...newTx, notes: e.target.value })}
         />
+
+        <label className="block text-xs text-text-muted mb-1">Reference Number (Optional)</label>
+        <input
+          className="input mb-3"
+          type="text"
+          placeholder="e.g. REF123456"
+          value={newTx.reference_no}
+          onChange={(e) => setNewTx({ ...newTx, reference_no: e.target.value })}
+        />
+
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            id="is_recurring"
+            checked={newTx.is_recurring}
+            onChange={(e) => setNewTx({ ...newTx, is_recurring: e.target.checked })}
+          />
+          <label htmlFor="is_recurring" className="text-xs text-text-muted">Recurring Transaction</label>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4">
+          <input
+            type="checkbox"
+            id="is_split"
+            checked={newTx.is_split}
+            onChange={(e) => setNewTx({ ...newTx, is_split: e.target.checked })}
+          />
+          <label htmlFor="is_split" className="text-xs text-text-muted">Split Transaction</label>
+        </div>
 
         <ActionButton variant="primary" className="w-full" loading={addLoading} onClick={handleAdd}>
           {editingId ? 'Update Transaction' : 'Add Transaction'}

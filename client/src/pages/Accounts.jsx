@@ -13,6 +13,7 @@ import { formatBDT } from '../utils/formatBDT';
 const ICONS = {
   bank: Wallet,
   mobile_banking: Smartphone,
+  mutual_fund: Wallet,
   cash: Banknote,
 };
 
@@ -56,7 +57,7 @@ export default function Accounts() {
     setEditingId(account.id);
     setNewName(account.name);
     setNewType(account.type);
-    setNewBalance(String(account.balance));
+    setNewBalance(String(account.current_balance));
     setAddOpen(true);
   };
 
@@ -71,14 +72,14 @@ export default function Accounts() {
         await api.put(`${apiPaths.accounts}/${editingId}`, {
           name: newName.trim(),
           type: newType,
-          balance: Number(newBalance),
+          current_balance: Number(newBalance),
         });
         toast.push('Account updated', 'success');
       } else {
         await api.post(apiPaths.accounts, {
           name: newName.trim(),
           type: newType,
-          balance: Number(newBalance) || 0,
+          current_balance: Number(newBalance) || 0,
         });
         toast.push('Account added', 'success');
       }
@@ -190,7 +191,7 @@ export default function Accounts() {
                     </div>
                     <div className="text-[11px] text-text-muted">Added {fmtDate(a.created_at)}</div>
                   </div>
-                  <div className="text-right font-mono text-base">{formatBDT(a.balance)}</div>
+                  <div className="text-right font-mono text-base">{formatBDT(a.current_balance)}</div>
                 </button>
                 <div className="flex items-center gap-1">
                   <button
@@ -237,6 +238,7 @@ export default function Accounts() {
         <select className="input mb-3" value={newType} onChange={(e) => setNewType(e.target.value)}>
           <option value="bank">Bank</option>
           <option value="mobile_banking">Mobile Banking</option>
+          <option value="mutual_fund">Mutual Fund</option>
           <option value="cash">Cash</option>
         </select>
 
@@ -272,7 +274,7 @@ export default function Accounts() {
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>
@@ -285,7 +287,7 @@ export default function Accounts() {
         >
           {accounts.filter(a => String(a.id) !== fromAccountId).map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

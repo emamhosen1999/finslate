@@ -70,4 +70,159 @@ router.post('/debt-repayment', requireAuth, async (req, res, next) => {
   }
 });
 
+// Export data to CSV
+router.get('/export/:entity', requireAuth, async (req, res, next) => {
+  try {
+    const { entity } = req.params;
+    const { format = 'csv', start_date, end_date } = req.query;
+    const userId = req.user.id;
+
+    let query = '';
+    let filename = '';
+    let headers = [];
+
+    switch (entity) {
+      case 'transactions':
+        query = `
+          SELECT t.*, a.name as account_name 
+          FROM transactions t
+          LEFT JOIN accounts a ON t.account_id = a.id
+          WHERE t.user_id = ? AND t.deleted_at IS NULL
+        `;
+        filename = 'transactions.csv';
+        headers = ['ID', 'Date', 'Type', 'Amount', 'Category', 'Description', 'Account'];
+        if (start_date) {
+          query += ' AND t.created_at >= ?';
+        }
+        if (end_date) {
+          query += ' AND t.created_at <= ?';
+        }
+        query += ' ORDER BY t.created_at DESC';
+        break;
+      case 'accounts':
+        query = 'SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at DESC';
+        filename = 'accounts.csv';
+        headers = ['ID', 'Name', 'Type', 'Balance', 'Created At'];
+        break;
+      case 'credit_cards':
+        query = 'SELECT * FROM credit_cards WHERE user_id = ? ORDER BY created_at DESC';
+        filename = 'credit_cards.csv';
+        headers = ['ID', 'Name', 'Limit', 'Due Amount', 'Due Date', 'Created At'];
+        break;
+      case 'loans':
+        query = 'SELECT * FROM loans WHERE user_id = ? ORDER BY created_at DESC';
+        filename = 'loans.csv';
+        headers = ['ID', 'Name', 'Principal', 'Remaining', 'Monthly EMI', 'Interest Rate', 'Created At'];
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid entity type' });
+    }
+
+    const params = [userId];
+    if (start_date) params.push(start_date);
+    if (end_date) params.push(end_date);
+
+    const [rows] = await pool.query(query, params);
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      const csvRows = [];
+      csvRows.push(headers.join(','));
+
+      for (const row of rows) {
+        const values = Object.values(row).map(v => {
+          if (v === null || v === undefined) return '';
+          if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`;
+          return String(v);
+        });
+        csvRows.push(values.join(','));
+      }
+
+      return res.send(csvRows.join('\n'));
+    } else if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${entity}.json"`);
+      return res.json(rows);
+    } else {
+      return res.status(400).json({ error: 'Invalid format. Use csv or json.' });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Export all user data (for backup)
+router.get('/export-all', requireAuth, async (req, res, next) => {
+  try {
+    const { format = 'json' } = req.query;
+    const userId = req.user.id;
+
+    const data = {
+      user: {},
+      accounts: [],
+      transactions: [],
+      credit_cards: [],
+      loans: [],
+      dps: [],
+      fixed_deposits: [],
+      investments: [],
+      bills: [],
+      subscriptions: [],
+      goals: [],
+      budgets: [],
+    };
+
+    // Export user profile
+    const [users] = await pool.query(
+      'SELECT id, name, email, timezone, date_format, financial_year_start, tin_number, nid_number FROM users WHERE id = ?',
+      [userId]
+    );
+    if (users.length) {
+      data.user = users[0];
+    }
+
+    // Export all entities
+    const [accounts] = await pool.query('SELECT * FROM accounts WHERE user_id = ?', [userId]);
+    data.accounts = accounts;
+
+    const [transactions] = await pool.query('SELECT * FROM transactions WHERE user_id = ? AND deleted_at IS NULL', [userId]);
+    data.transactions = transactions;
+
+    const [creditCards] = await pool.query('SELECT * FROM credit_cards WHERE user_id = ?', [userId]);
+    data.credit_cards = creditCards;
+
+    const [loans] = await pool.query('SELECT * FROM loans WHERE user_id = ?', [userId]);
+    data.loans = loans;
+
+    const [dps] = await pool.query('SELECT * FROM dps WHERE user_id = ?', [userId]);
+    data.dps = dps;
+
+    const [fixedDeposits] = await pool.query('SELECT * FROM fixed_deposits WHERE user_id = ?', [userId]);
+    data.fixed_deposits = fixedDeposits;
+
+    const [investments] = await pool.query('SELECT * FROM investments WHERE user_id = ?', [userId]);
+    data.investments = investments;
+
+    const [bills] = await pool.query('SELECT * FROM bills WHERE user_id = ?', [userId]);
+    data.bills = bills;
+
+    const [subscriptions] = await pool.query('SELECT * FROM subscriptions WHERE user_id = ?', [userId]);
+    data.subscriptions = subscriptions;
+
+    const [goals] = await pool.query('SELECT * FROM goals WHERE user_id = ?', [userId]);
+    data.goals = goals;
+
+    const [budgets] = await pool.query('SELECT * FROM budgets WHERE user_id = ?', [userId]);
+    data.budgets = budgets;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="finslate-backup-${new Date().toISOString().split('T')[0]}.json"`);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

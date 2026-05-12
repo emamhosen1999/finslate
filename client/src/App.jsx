@@ -26,6 +26,8 @@ import ProvidentFund from './pages/ProvidentFund.jsx';
 import TaxRecords from './pages/TaxRecords.jsx';
 import Goals from './pages/Goals.jsx';
 import Analytics from './pages/Analytics.jsx';
+import Reports from './pages/Reports.jsx';
+import CurrencyManagement from './pages/CurrencyManagement.jsx';
 import Profile from './pages/Profile.jsx';
 
 function AuthGate({ children }) {
@@ -223,6 +225,22 @@ export default function App() {
           element={
             <AuthGate>
               <Analytics />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <AuthGate>
+              <Reports />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/currency-management"
+          element={
+            <AuthGate>
+              <CurrencyManagement />
             </AuthGate>
           }
         />

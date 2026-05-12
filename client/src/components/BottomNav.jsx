@@ -28,6 +28,8 @@ const moreTabs = [
   { to: '/provident-fund', label: 'Provident Fund', icon: 'Briefcase' },
   { to: '/tax-records', label: 'Tax Records', icon: 'FileText' },
   { to: '/goals', label: 'Goals', icon: 'Target' },
+  { to: '/reports', label: 'Reports', icon: 'FileText' },
+  { to: '/currency-management', label: 'Currency', icon: 'DollarSign' },
   { to: '/profile', label: 'Profile', icon: 'User' },
 ];
 

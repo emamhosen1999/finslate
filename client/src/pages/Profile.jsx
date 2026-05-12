@@ -11,6 +11,9 @@ export default function Profile() {
     financial_year_start: 7,
     tin_number: '',
     nid_number: '',
+    phone: '',
+    default_currency: 'BDT',
+    is_active: true,
   });
 
   useEffect(() => {
@@ -21,6 +24,9 @@ export default function Profile() {
         financial_year_start: user.financial_year_start || 7,
         tin_number: user.tin_number || '',
         nid_number: user.nid_number || '',
+        phone: user.phone || '',
+        default_currency: user.default_currency || 'BDT',
+        is_active: user.is_active !== undefined ? user.is_active : true,
       });
     }
   }, [user]);
@@ -49,6 +55,12 @@ export default function Profile() {
     <div className="app-frame">
       <h1 className="text-2xl font-bold mb-6">Profile Settings</h1>
 
+      {user?.last_login_at && (
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+          Last login: {new Date(user.last_login_at).toLocaleString()}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Name</label>
@@ -68,6 +80,43 @@ export default function Profile() {
             disabled
             className="w-full p-3 border rounded-lg bg-gray-50"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Phone (Optional)</label>
+          <input
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            className="w-full p-3 border rounded-lg"
+            placeholder="+880..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Default Currency</label>
+          <select
+            value={formData.default_currency}
+            onChange={(e) => setFormData({ ...formData, default_currency: e.target.value })}
+            className="w-full p-3 border rounded-lg"
+          >
+            <option value="BDT">BDT - Bangladeshi Taka</option>
+            <option value="USD">USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+            <option value="GBP">GBP - British Pound</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Account Status</label>
+          <select
+            value={formData.is_active ? 'active' : 'inactive'}
+            onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
+            className="w-full p-3 border rounded-lg"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </div>
 
         <div>

@@ -90,6 +90,12 @@ async function start() {
   app.use('/api/reports', require('./routes/reports'));
   app.use('/api/analytics', require('./routes/analytics'));
   app.use('/api/actions', require('./routes/actions'));
+  app.use('/api/audit-logs', require('./routes/auditLogs'));
+  app.use('/api/bill-payments', require('./routes/billPayments'));
+  app.use('/api/credit-card-statements', require('./routes/creditCardStatements'));
+  app.use('/api/credit-card-payments', require('./routes/creditCardPayments'));
+  app.use('/api/dps-payments', require('./routes/dpsPayments'));
+  app.use('/api/pf-contributions', require('./routes/pfContributions'));
 
   // Serve the built client when present (single-process deploy, e.g. Replit/Fly).
   const clientDist = path.resolve(__dirname, '../client/dist');

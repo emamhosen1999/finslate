@@ -142,4 +142,156 @@ router.post('/:id/pay', requireAuth, async (req, res, next) => {
   }
 });
 
+// Get amortization schedule for a loan
+router.get('/:id/amortization', requireAuth, async (req, res, next) => {
+  try {
+    const loanId = Number(req.params.id);
+    const [loan] = await pool.query(
+      'SELECT * FROM loans WHERE id = ? AND user_id = ?',
+      [loanId, req.user.id]
+    );
+
+    if (!loan.length) {
+      return res.status(404).json({ error: 'Loan not found.' });
+    }
+
+    const loanData = loan[0];
+    const principal = Number(loanData.principal) || 0;
+    const remaining = Number(loanData.remaining) || principal;
+    const monthlyEMI = Number(loanData.monthly_emi) || 0;
+    const annualRate = Number(loanData.interest_rate) || 0;
+
+    if (monthlyEMI === 0) {
+      return res.status(400).json({ error: 'Monthly EMI is required for amortization schedule.' });
+    }
+
+    const monthlyRate = annualRate / 100 / 12;
+    const schedule = [];
+    let balance = remaining;
+    let month = 1;
+    let totalInterest = 0;
+    let totalPrincipal = 0;
+
+    while (balance > 0.01 && month <= 600) { // Max 50 years
+      const interestPayment = balance * monthlyRate;
+      let principalPayment = monthlyEMI - interestPayment;
+
+      if (principalPayment > balance) {
+        principalPayment = balance;
+      }
+
+      balance -= principalPayment;
+      totalInterest += interestPayment;
+      totalPrincipal += principalPayment;
+
+      schedule.push({
+        month: month,
+        emi: monthlyEMI,
+        principal_payment: Math.round(principalPayment * 100) / 100,
+        interest_payment: Math.round(interestPayment * 100) / 100,
+        balance: Math.round(balance * 100) / 100
+      });
+
+      month++;
+    }
+
+    res.json({
+      loan_id: loanId,
+      loan_name: loanData.name,
+      principal: principal,
+      remaining: remaining,
+      monthly_emi: monthlyEMI,
+      annual_interest_rate: annualRate,
+      total_months: month - 1,
+      total_payment: Math.round((totalInterest + totalPrincipal) * 100) / 100,
+      total_interest: Math.round(totalInterest * 100) / 100,
+      total_principal: Math.round(totalPrincipal * 100) / 100,
+      schedule: schedule
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Simulate loan prepayment
+router.post('/:id/prepayment-simulation', requireAuth, async (req, res, next) => {
+  try {
+    const loanId = Number(req.params.id);
+    const { prepayment_amount, prepayment_date } = req.body;
+
+    if (!prepayment_amount) {
+      return res.status(400).json({ error: 'Prepayment amount is required.' });
+    }
+
+    const [loan] = await pool.query(
+      'SELECT * FROM loans WHERE id = ? AND user_id = ?',
+      [loanId, req.user.id]
+    );
+
+    if (!loan.length) {
+      return res.status(404).json({ error: 'Loan not found.' });
+    }
+
+    const loanData = loan[0];
+    const remaining = Number(loanData.remaining) || 0;
+    const monthlyEMI = Number(loanData.monthly_emi) || 0;
+    const annualRate = Number(loanData.interest_rate) || 0;
+    const prepaymentAmount = Number(prepayment_amount);
+
+    if (prepaymentAmount > remaining) {
+      return res.status(400).json({ error: 'Prepayment amount cannot exceed remaining balance.' });
+    }
+
+    const monthlyRate = annualRate / 100 / 12;
+    const newRemaining = remaining - prepaymentAmount;
+
+    // Calculate new schedule
+    let balance = newRemaining;
+    let month = 1;
+    let totalInterest = 0;
+
+    while (balance > 0.01 && month <= 600) {
+      const interestPayment = balance * monthlyRate;
+      let principalPayment = monthlyEMI - interestPayment;
+      if (principalPayment > balance) principalPayment = balance;
+      balance -= principalPayment;
+      totalInterest += interestPayment;
+      month++;
+    }
+
+    // Calculate original schedule for comparison
+    let originalBalance = remaining;
+    let originalMonth = 1;
+    let originalTotalInterest = 0;
+
+    while (originalBalance > 0.01 && originalMonth <= 600) {
+      const interestPayment = originalBalance * monthlyRate;
+      let principalPayment = monthlyEMI - interestPayment;
+      if (principalPayment > originalBalance) principalPayment = originalBalance;
+      originalBalance -= principalPayment;
+      originalTotalInterest += interestPayment;
+      originalMonth++;
+    }
+
+    const monthsSaved = originalMonth - month;
+    const interestSaved = originalTotalInterest - totalInterest;
+
+    res.json({
+      loan_id: loanId,
+      loan_name: loanData.name,
+      prepayment_amount: prepaymentAmount,
+      original_remaining: remaining,
+      new_remaining: newRemaining,
+      original_months: originalMonth - 1,
+      new_months: month - 1,
+      months_saved: monthsSaved,
+      original_total_interest: Math.round(originalTotalInterest * 100) / 100,
+      new_total_interest: Math.round(totalInterest * 100) / 100,
+      interest_saved: Math.round(interestSaved * 100) / 100
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
