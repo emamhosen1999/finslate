@@ -3,7 +3,3 @@ node_modules
 .DS_Store
 *.log
 .vite
-# cPanel/Passenger manages .htaccess — do not track in git
-.htaccess
-# client/dist is intentionally tracked — built locally and deployed via git
-!client/dist
