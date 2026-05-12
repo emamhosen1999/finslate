@@ -5,14 +5,15 @@ export default function ExportCSV({ transactions, label = 'Export CSV' }) {
   const handle = () => {
     if (!transactions || transactions.length === 0) return;
     const rows = transactions.map((t) => ({
-      date: t.created_at,
+      date: t.transaction_date,
       account: t.account_name || '',
       type: t.type,
       amount: Number(t.amount).toFixed(2),
-      category: t.category,
-      description: t.description || '',
-      ref_type: t.ref_type || '',
-      ref_id: t.ref_id || '',
+      category: t.category_id || '',
+      payee: t.payee || '',
+      notes: t.notes || '',
+      source_type: t.source_type || '',
+      source_id: t.source_id || '',
     }));
     const csv = Papa.unparse(rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

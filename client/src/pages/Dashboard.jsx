@@ -20,12 +20,10 @@ export default function Dashboard() {
     accounts,
     loans,
     loading,
-    postSalary,
     debtRepayment,
   } = useFinance();
   const toast = useToast();
 
-  const [salaryLoading, setSalaryLoading] = useState(false);
   const [repayOpen, setRepayOpen] = useState(false);
   const [repayLoading, setRepayLoading] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState('');
@@ -34,24 +32,8 @@ export default function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState(null);
 
   const filteredTx = (transactions || []).filter((t) =>
-    categoryFilter ? t.category === categoryFilter : true,
+    categoryFilter ? t.category_id === categoryFilter : true,
   );
-
-  const handleSalary = async () => {
-    if (salaryLoading) return;
-    setSalaryLoading(true);
-    try {
-      const res = await postSalary();
-      toast.push(
-        `Salary posted: +${formatBDT(res?.breakdown?.salaryCredited || 80000)}`,
-        'success',
-      );
-    } catch (err) {
-      toast.push(err?.response?.data?.error || 'Failed to post salary', 'error');
-    } finally {
-      setSalaryLoading(false);
-    }
-  };
 
   const openRepay = () => {
     setSelectedLoan(loans[0]?.id ? String(loans[0].id) : '');
@@ -88,20 +70,13 @@ export default function Dashboard() {
       <main className="px-4">
         <NetWorthCard summary={summary} loading={loading && transactions.length === 0} />
 
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <ActionButton
-            variant="positive"
-            icon={ArrowDownCircle}
-            loading={salaryLoading}
-            onClick={handleSalary}
-          >
-            Post Salary
-          </ActionButton>
+        <div className="mt-4">
           <ActionButton
             variant="negative"
             icon={ArrowUpCircle}
             onClick={openRepay}
             disabled={!loans.length}
+            className="w-full"
           >
             Debt Repayment
           </ActionButton>
@@ -148,7 +123,7 @@ export default function Dashboard() {
         >
           {loans.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.name} · {formatBDT(l.remaining)} remaining
+              {l.lender_name} · {formatBDT(l.outstanding_balance)} remaining
             </option>
           ))}
         </select>
@@ -161,7 +136,7 @@ export default function Dashboard() {
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {formatBDT(a.balance)}
+              {a.name} · {formatBDT(a.current_balance)}
             </option>
           ))}
         </select>

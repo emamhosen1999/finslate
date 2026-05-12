@@ -91,12 +91,6 @@ export function FinanceProvider({ children }) {
     })();
   }, [loadMe, loadAll]);
 
-  const postSalary = useCallback(async () => {
-    const { data } = await api.post(apiPaths.postSalary);
-    dispatch({ type: 'LOAD_ALL', payload: data });
-    return data;
-  }, []);
-
   const debtRepayment = useCallback(async ({ loanId, accountId, amount }) => {
     const { data } = await api.post(apiPaths.debtRepayment, { loanId, accountId, amount });
     dispatch({ type: 'LOAD_ALL', payload: data });
@@ -112,8 +106,8 @@ export function FinanceProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ...state, loadAll, loadMe, postSalary, debtRepayment, logout, dispatch }),
-    [state, loadAll, loadMe, postSalary, debtRepayment, logout],
+    () => ({ ...state, loadAll, loadMe, debtRepayment, logout, dispatch }),
+    [state, loadAll, loadMe, debtRepayment, logout],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

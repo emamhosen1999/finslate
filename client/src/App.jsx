@@ -10,6 +10,27 @@ import CreditCards from './pages/CreditCards.jsx';
 import Loan from './pages/Loan.jsx';
 import DPS from './pages/DPS.jsx';
 import Transactions from './pages/Transactions.jsx';
+import Budgets from './pages/Budgets.jsx';
+import RecurringTransactions from './pages/RecurringTransactions.jsx';
+import FixedDeposits from './pages/FixedDeposits.jsx';
+import IncomeSources from './pages/IncomeSources.jsx';
+import Investments from './pages/Investments.jsx';
+import Insurance from './pages/Insurance.jsx';
+import Sanchayapatra from './pages/Sanchayapatra.jsx';
+import PersonalLending from './pages/PersonalLending.jsx';
+import NetWorth from './pages/NetWorth.jsx';
+import Notifications from './pages/Notifications.jsx';
+import Bills from './pages/Bills.jsx';
+import Subscriptions from './pages/Subscriptions.jsx';
+import ProvidentFund from './pages/ProvidentFund.jsx';
+import TaxRecords from './pages/TaxRecords.jsx';
+import Goals from './pages/Goals.jsx';
+import Analytics from './pages/Analytics.jsx';
+import Reports from './pages/Reports.jsx';
+import CurrencyManagement from './pages/CurrencyManagement.jsx';
+import Tags from './pages/Tags.jsx';
+import Categories from './pages/Categories.jsx';
+import Profile from './pages/Profile.jsx';
 
 function AuthGate({ children }) {
   const { user, loading } = useFinance();
@@ -78,6 +99,174 @@ export default function App() {
           element={
             <AuthGate>
               <Transactions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/budgets"
+          element={
+            <AuthGate>
+              <Budgets />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/recurring"
+          element={
+            <AuthGate>
+              <RecurringTransactions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/fixed-deposits"
+          element={
+            <AuthGate>
+              <FixedDeposits />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/income"
+          element={
+            <AuthGate>
+              <IncomeSources />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/investments"
+          element={
+            <AuthGate>
+              <Investments />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/insurance"
+          element={
+            <AuthGate>
+              <Insurance />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/sanchayapatra"
+          element={
+            <AuthGate>
+              <Sanchayapatra />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/personal-lending"
+          element={
+            <AuthGate>
+              <PersonalLending />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/net-worth"
+          element={
+            <AuthGate>
+              <NetWorth />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <AuthGate>
+              <Notifications />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/bills"
+          element={
+            <AuthGate>
+              <Bills />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/subscriptions"
+          element={
+            <AuthGate>
+              <Subscriptions />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/provident-fund"
+          element={
+            <AuthGate>
+              <ProvidentFund />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/tax-records"
+          element={
+            <AuthGate>
+              <TaxRecords />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/goals"
+          element={
+            <AuthGate>
+              <Goals />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <AuthGate>
+              <Analytics />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <AuthGate>
+              <Reports />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/currency-management"
+          element={
+            <AuthGate>
+              <CurrencyManagement />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/tags"
+          element={
+            <AuthGate>
+              <Tags />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/categories"
+          element={
+            <AuthGate>
+              <Categories />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <AuthGate>
+              <Profile />
             </AuthGate>
           }
         />

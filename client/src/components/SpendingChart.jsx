@@ -15,10 +15,10 @@ export default function SpendingChart({ transactions, onCategoryClick }) {
     const year = now.getFullYear();
     const totals = Object.fromEntries(TRACKED.map((c) => [c, 0]));
     for (const t of transactions || []) {
-      if (t.type !== 'debit') continue;
-      const d = new Date((t.created_at || '').replace(' ', 'T'));
+      if (t.type !== 'expense') continue;
+      const d = new Date((t.transaction_date || '').replace(' ', 'T'));
       if (d.getMonth() !== month || d.getFullYear() !== year) continue;
-      const key = TRACKED.includes(t.category) ? t.category : 'Others';
+      const key = TRACKED.includes(t.category_id) ? t.category_id : 'Others';
       totals[key] += Number(t.amount) || 0;
     }
     return TRACKED.map((name) => ({
