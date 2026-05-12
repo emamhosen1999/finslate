@@ -117,20 +117,6 @@ const statements = [
     CONSTRAINT fk_fd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
 
-  `CREATE TABLE IF NOT EXISTS recurring_deposits (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    user_id         INT NOT NULL,
-    name            VARCHAR(100) NOT NULL,
-    monthly_amount  DECIMAL(12,2) NOT NULL,
-    interest_rate   DECIMAL(5,2) NOT NULL,
-    total_deposited DECIMAL(12,2) DEFAULT 0.00,
-    maturity_amount DECIMAL(12,2),
-    start_date      DATE,
-    maturity_date   DATE,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_rd_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`,
-
   `CREATE TABLE IF NOT EXISTS income_sources (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     user_id         INT NOT NULL,
@@ -172,19 +158,6 @@ const statements = [
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_insurance_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_insurance_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS cashback_rewards (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    user_id         INT NOT NULL,
-    source          VARCHAR(100) NOT NULL,
-    type            VARCHAR(50) NOT NULL,
-    amount          DECIMAL(12,2) NOT NULL,
-    account_id      INT,
-    date_received   DATE,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cashback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cashback_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
   )`,
 ];
 

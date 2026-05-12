@@ -13,11 +13,9 @@ import Transactions from './pages/Transactions.jsx';
 import Budgets from './pages/Budgets.jsx';
 import RecurringTransactions from './pages/RecurringTransactions.jsx';
 import FixedDeposits from './pages/FixedDeposits.jsx';
-import RecurringDeposits from './pages/RecurringDeposits.jsx';
 import IncomeSources from './pages/IncomeSources.jsx';
 import Investments from './pages/Investments.jsx';
 import Insurance from './pages/Insurance.jsx';
-import Cashback from './pages/Cashback.jsx';
 import Analytics from './pages/Analytics.jsx';
 
 function AuthGate({ children }) {
@@ -115,14 +113,6 @@ export default function App() {
           }
         />
         <Route
-          path="/recurring-deposits"
-          element={
-            <AuthGate>
-              <RecurringDeposits />
-            </AuthGate>
-          }
-        />
-        <Route
           path="/income"
           element={
             <AuthGate>
@@ -143,14 +133,6 @@ export default function App() {
           element={
             <AuthGate>
               <Insurance />
-            </AuthGate>
-          }
-        />
-        <Route
-          path="/cashback"
-          element={
-            <AuthGate>
-              <Cashback />
             </AuthGate>
           }
         />
